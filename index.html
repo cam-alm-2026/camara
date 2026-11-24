@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Lamo8MQV9ZEDWtyxtpvhKxbJ8+44UpS/A0kJfwVNmD0='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-+v9bc/z+7GosGT70AB/UUmthJgBAcHkHsUJaHubBBd4='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0f1115">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -116,6 +116,23 @@ const T_FRAME = 1, T_STATUS = 2, T_ALERT = 3, T_CMD = 0x10;
 let keys = null, mq = null, topics = null, remembered = false, devId = '';
 let mode = 'live', playLastTs = 0, playSpeed = 1, recDay = '';
 let lastFrameTs = 0, lastAlertTs = 0, frames = 0, lastCmdTs = 0;
+// Reloj de la cámara (hora autenticada por HTTPS): se estima con los mensajes cifrados que llegan,
+// quedándose con el más adelantado (el de menos retraso). Así un móvil o PC con la hora mal
+// funciona igual. Un mensaje antiguo repetido no puede adelantar esta estimación.
+let clockOffset = null, clockWarned = false;
+const camNow = () => Date.now() + (clockOffset || 0);
+function learnClock(ts) {
+  const off = ts - Date.now();
+  if (clockOffset === null || off > clockOffset) {
+    clockOffset = off;
+    if (lastCmdTs > camNow() + 1000) lastCmdTs = camNow();   // descarta marcas hechas con la hora errónea
+  }
+  if (!clockWarned && Math.abs(clockOffset) > 30000) {
+    clockWarned = true;
+    $('msg').textContent = '⏱ La hora de este dispositivo va ' + Math.round(Math.abs(clockOffset) / 1000) +
+      ' s ' + (clockOffset > 0 ? 'atrasada' : 'adelantada') + '. Se corrige sola, pero conviene activar la hora automática.';
+  }
+}
 let status = null, lastStatusTs = 0, online = null, dragging = false, frameBlob = null, hiddenAt = 0;
 const urls = {};
 
@@ -208,7 +225,7 @@ const T_LIST = 4;
 
 async function sendCmd(obj) {
   if (!mq || !mq.ok) return;
-  const ts = Math.max(Date.now(), lastCmdTs + 1); lastCmdTs = ts;
+  const ts = Math.max(camNow(), lastCmdTs + 1); lastCmdTs = ts;
   const j = enc.encode(JSON.stringify(obj));
   const pt = new Uint8Array(9 + j.length);
   new DataView(pt.buffer).setBigUint64(0, BigInt(ts)); pt[8] = T_CMD; pt.set(j, 9);
@@ -278,7 +295,7 @@ function playAudio(adpcm) {
 
 function renderStatus() {
   // "En línea" se deduce del estado CIFRADO y reciente; el topic /o no está autenticado y solo es una pista
-  const age = lastStatusTs ? Math.round((Date.now() - lastStatusTs) / 1000) : null;
+  const age = lastStatusTs ? Math.round((camNow() - lastStatusTs) / 1000) : null;
   const fresh = age !== null && age < 75;
   const p = [fresh ? '🟢 Cámara en línea' : (online === false ? '🔴 Cámara desconectada' : '🟠 Sin datos recientes de la cámara')];
   if (age !== null) p.push('estado de hace ' + age + ' s');
@@ -380,20 +397,21 @@ async function onMsg(topic, m) {
   let r;
   try { r = await openMsg(topic, m); }
   catch (e) { $('msg').textContent = '⚠️ Mensaje que no se puede descifrar: frase secreta o ID incorrectos, o datos manipulados.'; return; }
-  $('msg').textContent = '';
+  if (!clockWarned) $('msg').textContent = '';
+  learnClock(r.ts);
   if (topic === topics.list && r.type === T_LIST) {
-    if (Date.now() - r.ts > 60000) return;
+    if (camNow() - r.ts > 60000) return;
     try { renderList(JSON.parse(dec.decode(r.data))); } catch (e) {}
     return;
   }
   if (topic === topics.audio && r.type === T_AUDIO) {
-    if (mode === 'live' && Date.now() - r.ts < 10000) playAudio(r.data);
+    if (mode === 'live' && camNow() - r.ts < 10000) playAudio(r.data);
     return;
   }
   if (topic === topics.video && r.type === T_FRAME) {
     if (mode !== 'live') return;
     if (r.ts <= lastFrameTs) return;               // descarta repetidos o desordenados
-    if (Date.now() - r.ts > 30000) { $('msg').textContent = '⚠️ Fotograma antiguo descartado (posible repetición o reloj desajustado).'; return; }
+    if (camNow() - r.ts > 30000) { $('msg').textContent = '⚠️ Fotograma antiguo descartado (posible repetición o reloj desajustado).'; return; }
     lastFrameTs = r.ts; frames++;
     frameBlob = showImg($('cam'), r.data, 'cam'); $('ph').hidden = true;
   } else if (topic === topics.status && r.type === T_STATUS) {
@@ -546,7 +564,7 @@ document.addEventListener('visibilitychange', () => {
 setInterval(() => { if (topics) renderStatus(); }, 5000);
 setInterval(() => {
   if (!topics) return;
-  const lag = lastFrameTs ? Math.max(0, (Date.now() - lastFrameTs) / 1000) : 0;
+  const lag = lastFrameTs ? Math.max(0, (camNow() - lastFrameTs) / 1000) : 0;
   $('fps').textContent = frames + ' fps' + (lastFrameTs && lag > 5 ? ' · sin vídeo hace ' + Math.round(lag) + ' s' : '');
   frames = 0;
 }, 1000);
