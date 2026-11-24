@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Q7xE11Bt5L7eTrDRYiBlnBuGGOylXR7h/0RRNlfxcDI='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Lamo8MQV9ZEDWtyxtpvhKxbJ8+44UpS/A0kJfwVNmD0='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0f1115">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -76,6 +76,19 @@ select,input[type=time]{font-size:16px;padding:10px;border-radius:10px;border:1p
   <div class="row"><label class="chk"><input type="checkbox" id="armed"> Alarma armada</label></div>
   <div class="row"><label class="chk"><input type="checkbox" id="conf"> Confirmar movimiento con la cámara (menos falsas alarmas)</label></div>
   <div class="row"><span>💡 Flash</span><input type="range" id="flash" min="0" max="100" step="10" value="0"><span id="flv">0 %</span><button class="sec" id="floff">Apagar</button></div>
+  <h2>Audio</h2>
+  <div class="row"><button id="listen">🔊 Escuchar</button><span id="sndlvl" class="small"></span></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="mic"> Micrófono de la cámara (directo y grabación)</label></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="noise"> Alerta por ruido fuerte</label></div>
+  <div class="row"><span>Umbral de ruido</span><input type="range" id="nlvl" min="30" max="100" value="75"><span id="nlv">75</span></div>
+  <h2>Sirena</h2>
+  <div class="row"><button id="siren">🚨 Activar sirena</button></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="sir"> Sirena al detectar intrusión</label></div>
+  <div class="row"><span>Duración</span><select id="sirs"><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option><option value="120">120 s</option></select></div>
+  <div class="row"><span>Volumen sirena</span><input type="range" id="svol" min="5" max="100" step="5" value="100"><span id="svv">100 %</span></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="beep"> Pitidos al salir y al armar/desarmar</label></div>
+  <div class="row"><span>Volumen pitidos</span><input type="range" id="bvol" min="5" max="100" step="5" value="40"><span id="bvv">40 %</span></div>
+  <div class="row small">Al soltar el deslizador, la cámara suena 1 s con el volumen elegido.</div>
   <div id="st"></div>
   <h2>Grabaciones</h2>
   <div class="row"><button class="sec" id="recload">Ver grabaciones</button><select id="days" hidden></select></div>
@@ -214,6 +227,55 @@ function showImg(img, data, k) {
   return blob;
 }
 
+// ---------- audio: IMA-ADPCM (bloques de 260 B = 512 muestras a 16 kHz) ----------
+const T_AUDIO = 5;
+const ADPCM_STEP = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
+  107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796,
+  876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428,
+  4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350,
+  22385, 24623, 27086, 29794, 32767];
+const ADPCM_IDX = [-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8];
+function adpcmDecode(d) {
+  const blocks = Math.floor(d.length / 260), out = new Float32Array(blocks * 512);
+  let o = 0;
+  for (let b = 0; b < blocks; b++) {
+    const base = b * 260;
+    let pred = d[base] | (d[base + 1] << 8); if (pred & 0x8000) pred -= 0x10000;
+    let idx = Math.min(d[base + 2], 88);
+    for (let i = 0; i < 256; i++) {
+      const byte = d[base + 4 + i];
+      for (let k = 0; k < 2; k++) {
+        const c = k ? byte >> 4 : byte & 15;
+        const step = ADPCM_STEP[idx];
+        let delta = step >> 3;
+        if (c & 4) delta += step;
+        if (c & 2) delta += step >> 1;
+        if (c & 1) delta += step >> 2;
+        pred += (c & 8) ? -delta : delta;
+        if (pred > 32767) pred = 32767; else if (pred < -32768) pred = -32768;
+        idx += ADPCM_IDX[c]; if (idx < 0) idx = 0; else if (idx > 88) idx = 88;
+        out[o++] = pred / 32768;
+      }
+    }
+  }
+  return out;
+}
+let actx = null, nextT = 0, listening = false, playAudioTs = 0;
+function playAudio(adpcm) {
+  if (!actx || !listening) return;
+  const pcm = adpcmDecode(adpcm);
+  const ratio = actx.sampleRate / 16000, n = Math.floor(pcm.length * ratio);
+  const buf = actx.createBuffer(1, n, actx.sampleRate), ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) {                 // remuestreo lineal a la frecuencia del móvil
+    const x = i / ratio, j = Math.floor(x), f = x - j;
+    ch[i] = pcm[j] * (1 - f) + (j + 1 < pcm.length ? pcm[j + 1] : pcm[j]) * f;
+  }
+  const src = actx.createBufferSource(); src.buffer = buf; src.connect(actx.destination);
+  const now = actx.currentTime;
+  if (nextT < now + 0.05 || nextT > now + 2) nextT = now + 0.3;   // colchón de 300 ms
+  src.start(nextT); nextT += buf.duration;
+}
+
 function renderStatus() {
   // "En línea" se deduce del estado CIFRADO y reciente; el topic /o no está autenticado y solo es una pista
   const age = lastStatusTs ? Math.round((Date.now() - lastStatusTs) / 1000) : null;
@@ -226,6 +288,15 @@ function renderStatus() {
     if (status.nt) p.push('🌙 Modo noche');
     p.push(status.sd >= 0 ? ('SD: ' + (status.sd / 1024).toFixed(1) + ' GB libres' + (status.rec ? ' · grabando' : '')) : 'Sin tarjeta SD');
     $('conf').checked = !!status.cf;
+    p.push(status.mic === 1 ? '🎙 Micrófono OK' : status.mic === 2 ? '🎙 Micrófono desactivado' : '🎙 Sin micrófono');
+    if (status.sir) p.push('🚨 SIRENA SONANDO');
+    $('mic').checked = !!status.me; $('noise').checked = !!status.na;
+    if (!nlDragging) { $('nlvl').value = status.nl; $('nlv').textContent = status.nl; }
+    if (status.sv !== undefined && volDragging !== 'svol') { $('svol').value = status.sv; $('svv').textContent = status.sv + ' %'; }
+    if (status.bv !== undefined && volDragging !== 'bvol') { $('bvol').value = status.bv; $('bvv').textContent = status.bv + ' %'; }
+    $('sndlvl').textContent = status.mic === 1 ? 'Nivel de sonido: ' + status.snd + ' (umbral ' + status.nl + ')' : '';
+    $('siren').textContent = status.sir ? '🔇 Parar sirena' : '🚨 Activar sirena';
+    $('sir').checked = !!status.sa; $('sirs').value = String(status.ss); $('beep').checked = !!status.bp;
     if (!flDragging) { $('flash').value = status.fl || 0; $('flv').textContent = (status.fl || 0) + ' %'; }
     p.push(status.motion ? 'Último movimiento: ' + fmt(status.motion) : 'Sin movimiento registrado');
     $('armed').checked = !!status.armed;
@@ -275,7 +346,7 @@ function startPlay(day, hhmmss, backSeconds) {
   if (t < 0) t = 0;
   const tt = pad2(Math.floor(t / 3600)) + pad2(Math.floor(t / 60) % 60) + pad2(t % 60);
   playSpeed = +$('speed').value || 1;
-  mode = 'play'; playLastTs = 0;
+  mode = 'play'; playLastTs = 0; playAudioTs = 0; nextT = 0;
   $('pb').style.display = 'block';
   $('pb').textContent = '▶ Cargando grabación…';
   $('back').hidden = false;
@@ -285,7 +356,7 @@ function startPlay(day, hhmmss, backSeconds) {
 
 function backToLive() {
   sendCmd({ c: 'stop' });
-  mode = 'live'; lastFrameTs = 0;
+  mode = 'live'; lastFrameTs = 0; nextT = 0;
   $('pb').style.display = 'none'; $('back').hidden = true;
 }
 
@@ -296,6 +367,10 @@ async function onMsg(topic, m) {
     let r;
     try { r = await openWith(keys.rec, 'rec:' + devId, m); }
     catch (e) { $('msg').textContent = '⚠️ Grabación que no se puede descifrar (frase o ID distintos, o datos manipulados).'; return; }
+    if (r.type === T_AUDIO) {
+      if (r.ts > playAudioTs) { playAudioTs = r.ts; if (playSpeed === 1) playAudio(r.data); }
+      return;
+    }
     if (r.type !== T_FRAME || r.ts <= playLastTs) return;
     playLastTs = r.ts;
     frameBlob = showImg($('cam'), r.data, 'cam'); $('ph').hidden = true;
@@ -309,6 +384,10 @@ async function onMsg(topic, m) {
   if (topic === topics.list && r.type === T_LIST) {
     if (Date.now() - r.ts > 60000) return;
     try { renderList(JSON.parse(dec.decode(r.data))); } catch (e) {}
+    return;
+  }
+  if (topic === topics.audio && r.type === T_AUDIO) {
+    if (mode === 'live' && Date.now() - r.ts < 10000) playAudio(r.data);
     return;
   }
   if (topic === topics.video && r.type === T_FRAME) {
@@ -371,10 +450,10 @@ async function persistDevice(host, user, dev) {
 function startSession(host, user, pass, dev) {
   const b = 'espcam/' + dev;
   devId = dev;
-  topics = { video: b + '/v', status: b + '/s', alert: b + '/a', cmd: b + '/c', online: b + '/o', list: b + '/l', play: b + '/p' };
+  topics = { video: b + '/v', status: b + '/s', alert: b + '/a', cmd: b + '/c', online: b + '/o', list: b + '/l', play: b + '/p', audio: b + '/u' };
   $('login').hidden = true; $('app').hidden = false;
   $('logout').textContent = remembered ? 'Olvidar este dispositivo' : 'Cerrar sesión';
-  mq = new Mqtt(host, user, pass, [topics.video, topics.status, topics.alert, topics.online, topics.list, topics.play], onMsg, onState);
+  mq = new Mqtt(host, user, pass, [topics.video, topics.status, topics.alert, topics.online, topics.list, topics.play, topics.audio], onMsg, onState);
 }
 
 $('go').onclick = async () => {
@@ -412,6 +491,30 @@ $('recload').onclick = () => { $('recinfo').textContent = 'Consultando la tarjet
 $('days').onchange = () => { if ($('days').value) sendCmd({ c: 'day', d: $('days').value }); };
 $('pgo').onclick = () => { const v = ($('ptime').value || '00:00:00').replace(/:/g, ''); if (recDay) startPlay(recDay, (v + '00').slice(0, 6), 0); };
 $('back').onclick = backToLive;
+$('listen').onclick = () => {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  actx.resume();
+  listening = !listening; nextT = 0;
+  $('listen').textContent = listening ? '🔇 Dejar de escuchar' : '🔊 Escuchar';
+};
+let nlDragging = false;
+$('mic').onchange = () => sendCmd({ c: 'mic', a: $('mic').checked ? 1 : 0 });
+$('noise').onchange = () => sendCmd({ c: 'noise', a: $('noise').checked ? 1 : 0 });
+$('nlvl').oninput = () => { nlDragging = true; $('nlv').textContent = $('nlvl').value; };
+$('nlvl').onchange = () => { nlDragging = false; sendCmd({ c: 'nlvl', a: +$('nlvl').value }); };
+let volDragging = '';
+for (const [id, out] of [['svol', 'svv'], ['bvol', 'bvv']]) {
+  $(id).oninput = () => { volDragging = id; $(out).textContent = $(id).value + ' %'; };
+  $(id).onchange = () => { volDragging = ''; sendCmd({ c: id, a: +$(id).value }); };
+}
+$('siren').onclick = () => {
+  const on = !(status && status.sir);
+  if (on && !confirm('¿Activar la sirena de la cámara?')) return;
+  sendCmd({ c: 'siren', a: on ? 1 : 0 });
+};
+$('sir').onchange = () => sendCmd({ c: 'sir', a: $('sir').checked ? 1 : 0 });
+$('sirs').onchange = () => sendCmd({ c: 'sirs', a: +$('sirs').value });
+$('beep').onchange = () => sendCmd({ c: 'beep', a: $('beep').checked ? 1 : 0 });
 $('ang').oninput = () => { dragging = true; $('angv').textContent = $('ang').value + '°'; };
 $('ang').onchange = () => { dragging = false; servo(+$('ang').value); };
 $('armed').onchange = () => sendCmd({ c: 'arm', a: $('armed').checked ? 1 : 0 });
