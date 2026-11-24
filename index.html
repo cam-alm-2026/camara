@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-B+Nb6K3NTvhama88L0g82fGUWjBtf5QKvyjvrsmHaIQ='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-E7cxv6m06YzQOWfTC1O34UHS1xu28iiK+h9qgZqzGsY='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0b0d12">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -122,6 +122,18 @@ select{padding:8px 10px;border-radius:10px;border:1px solid var(--line);backgrou
 .prog{height:4px;border-radius:2px;background:var(--surface2);overflow:hidden;margin-top:6px}
 .prog i{display:block;height:100%;width:0;background:var(--bad);transition:width .2s linear}
 
+/* ---------- desarrollo ---------- */
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.tile{background:var(--surface2);border-radius:12px;padding:10px 12px;min-height:64px}
+.tile small{display:block;color:var(--mut);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+.tile b{display:block;font-size:16px;margin-top:3px;font-variant-numeric:tabular-nums}
+.tile i{display:block;font-style:normal;color:var(--mut);font-size:12px;margin-top:2px}
+.tile.ok b{color:var(--ok)}.tile.warn b{color:var(--warn)}.tile.bad b{color:var(--bad)}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+pre.raw{background:var(--surface2);border-radius:10px;padding:10px;font-size:11.5px;overflow:auto;max-height:260px;margin:0;white-space:pre-wrap;word-break:break-all}
+.lock{display:flex;gap:8px}
+.lock input{flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--txt);font-size:16px}
+
 /* ---------- grabaciones ---------- */
 .days{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
 .days::-webkit-scrollbar{display:none}
@@ -154,6 +166,7 @@ nav button.sel{color:var(--txt)}nav button.sel .e{filter:none;opacity:1}
 #toast{position:fixed;left:50%;bottom:calc(var(--nav) + 16px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);opacity:0;z-index:50;max-width:92vw;padding:12px 16px;border-radius:12px;background:#222838;border:1px solid var(--line);font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);transition:.25s;pointer-events:none}
 #toast.show{opacity:1;transform:translateX(-50%)}
 #toast.bad{border-color:rgba(239,68,68,.6)}#toast.warn{border-color:rgba(245,158,11,.6)}
+.uhide{display:none!important}
 </style>
 </head>
 <body>
@@ -213,19 +226,19 @@ nav button.sel{color:var(--txt)}nav button.sel .e{filter:none;opacity:1}
         <span class="sw" id="armSw"></span>
       </button>
 
-      <div class="grid">
+      <div class="grid" id="cardActions">
         <button class="act" id="aListen"><span class="e">🔊</span>Escuchar</button>
         <button class="act" id="aFlash"><span class="e">💡</span>Flash</button>
         <button class="act danger" id="aSiren"><span class="e">🚨</span>Sirena</button>
         <button class="act talk" id="aTalk"><span class="e">🎙️</span>Hablar</button>
       </div>
 
-      <div class="card">
+      <div class="card" id="cardServo">
         <h3>Orientación</h3>
         <div class="row"><input type="range" id="ang" min="0" max="180" value="90"><output id="angv">90°</output><button class="ghost" id="center">Centrar</button></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="cardStatus">
         <h3>Estado</h3>
         <div class="chips" id="chips"><span class="chip">Esperando datos de la cámara…</span></div>
       </div>
@@ -312,12 +325,55 @@ nav button.sel{color:var(--txt)}nav button.sel .e{filter:none;opacity:1}
         <button class="danger-btn" id="logout">Cerrar sesión</button>
       </div>
     </div>
+    <!-- ---------- DESARROLLO (con contraseña) ---------- -->
+    <div id="tab-dev" hidden>
+      <div class="card" id="devLock">
+        <h3>Desarrollo</h3>
+        <p class="muted" style="margin:0 0 10px">Monitor de todo el sistema, pruebas de cada elemento y qué se muestra en el visor.</p>
+        <div class="lock"><input type="password" id="devPass" placeholder="Contraseña" autocomplete="off"><button class="ghost" id="devGo">Entrar</button></div>
+      </div>
+      <div id="devBody" hidden>
+        <div class="card">
+          <h3>Monitor en vivo</h3>
+          <div class="tiles" id="devTiles"></div>
+        </div>
+        <div class="card">
+          <h3>Pruebas</h3>
+          <p class="muted" style="margin:0 0 8px">Servo</p>
+          <div class="btns"><button class="ghost" data-servo="180">◀ 180°</button><button class="ghost" data-servo="90">90°</button><button class="ghost" data-servo="0">0° ▶</button><button class="ghost" id="devSweep">Barrido</button></div>
+          <p class="muted" style="margin:12px 0 8px">Sonidos (2 s cada uno)</p>
+          <div class="btns">
+            <button class="ghost" data-tone="1">Ululante</button><button class="ghost" data-tone="7">Rápida</button>
+            <button class="ghost" data-tone="8">Dos tonos</button><button class="ghost" data-tone="9">Pulsos</button>
+            <button class="ghost" data-tone="5">Señuelo</button><button class="ghost" data-tone="2">Activada</button>
+            <button class="ghost" data-tone="3">Desactivada</button><button class="ghost" data-tone="4">Tic</button>
+            <button class="ghost" data-tone="6">OK</button><button class="ghost" data-tone="0">⏹ Parar todo</button>
+          </div>
+          <p class="muted" style="margin:12px 0 8px">Flash</p>
+          <div class="btns"><button class="ghost" id="devBlink">Parpadeo 3 s</button><button class="ghost" data-flash="100">Encender</button><button class="ghost" data-flash="0">Apagar</button></div>
+        </div>
+        <div class="card">
+          <h3>Elementos visibles</h3>
+          <div id="devShow"></div>
+        </div>
+        <div class="card">
+          <h3>Estado recibido (JSON)</h3>
+          <pre class="raw" id="devRaw">—</pre>
+        </div>
+        <div class="card">
+          <h3>Registro del visor</h3>
+          <pre class="raw" id="devLog"></pre>
+          <div class="row" style="border-top:0"><button class="ghost" id="devLock2">🔒 Bloquear</button></div>
+        </div>
+      </div>
+    </div>
   </main>
 
   <nav>
     <button class="sel" data-tab="live"><span class="e">📹</span>Directo</button>
     <button data-tab="rec"><span class="e">🗂️</span>Grabaciones</button>
     <button data-tab="set"><span class="e">⚙️</span>Ajustes</button>
+    <button data-tab="dev"><span class="e">🛠️</span>Dev</button>
   </nav>
   <div id="toast"></div>
 </section>
@@ -332,14 +388,23 @@ const T_FRAME = 1, T_STATUS = 2, T_ALERT = 3, T_LIST = 4, T_AUDIO = 5, T_CMD = 0
 let keys = null, mq = null, topics = null, remembered = false, devId = '';
 let mode = 'live', playLastTs = 0, playSpeed = 1, recDay = '', playStartedAt = 0, playFrames = 0;
 let lastFrameTs = 0, lastAlertTs = 0, frames = 0, lastCmdTs = 0, tab = 'live', daysLoaded = false, dayData = null;
+let devUnlocked = false;
 let status = null, lastStatusTs = 0, online = null, frameBlob = null, hiddenAt = 0, flashLast = 100;
 const urls = {}, dragging = {};
 // Identificador aleatorio de esta pestaña: la cámara cuenta cuántos visores hay para repartir el caudal
 const viewerId = Array.from(crypto.getRandomValues(new Uint8Array(4)), b => b.toString(16).padStart(2, '0')).join('');
 
+// ---------- registro (pestaña de desarrollo) ----------
+const logLines = [], stats = { msgs: 0, frames: 0, status: 0, errors: 0, cmds: 0, since: Date.now() };
+function log(t) {
+  logLines.push(new Date().toLocaleTimeString('es-ES') + '  ' + t);
+  if (logLines.length > 120) logLines.shift();
+  if (tab === 'dev' && devUnlocked) $('devLog').textContent = logLines.slice().reverse().join('\n');
+}
 // ---------- avisos ----------
 let toastT = 0;
 function toast(txt, kind) {
+  log((kind === 'bad' ? '✖ ' : kind === 'warn' ? '⚠ ' : '· ') + txt);
   const t = $('toast'); t.textContent = txt; t.className = 'show ' + (kind || '');
   clearTimeout(toastT); toastT = setTimeout(() => { t.className = ''; }, kind === 'bad' ? 6000 : 3500);
 }
@@ -459,6 +524,8 @@ async function sendCmd(obj) {
   const ct = new Uint8Array(await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: enc.encode(topics.cmd), tagLength: 128 }, keys.cmd, pt));
   mq.publish(topics.cmd, cat(new Uint8Array([1]), iv, ct));
+  stats.cmds++;
+  if (obj.c !== 'watch' && obj.c !== 'diag') log('→ orden ' + JSON.stringify(obj));
   return true;
 }
 
@@ -721,8 +788,9 @@ function renderStatus() {
   // Vigilancia
   $('armBtn').classList.toggle('on', !!s.armed); setSw('armSw', s.armed);
   $('armIc').textContent = s.armed ? '🛡️' : '🔓';
-  $('armTitle').textContent = s.armed ? 'Vigilancia activada' : 'Vigilancia desactivada';
-  $('armSub').textContent = s.motion ? 'Último movimiento: ' + fmt(s.motion) : 'Sin movimiento registrado';
+  $('armTitle').textContent = s.armed ? (s.ex > 0 ? 'Alarma: se activa en ' + s.ex + ' s' : 'Alarma activada') : 'Alarma desactivada';
+  $('armSub').textContent = s.armed ? (s.ex > 0 ? 'Tiempo para salir de casa (pitido cada 10 s)' : 'Si detecta movimiento: aviso con foto y sirena')
+    : 'Solo el botón señuelo hace sonar la alarma';
   // Fichas de estado
   const c = $('chips'); c.textContent = '';
   const w = s.rssi;
@@ -731,7 +799,9 @@ function renderStatus() {
   c.appendChild(chip(s.mic === 1 ? '🎙 Micrófono OK' : s.mic === 2 ? '🎙 Micrófono desactivado' : '🎙 Sin micrófono', s.mic === 1 ? 'ok' : 'warn'));
   if (s.nt) c.appendChild(chip('🌙 Modo noche'));
   if (s.fl) c.appendChild(chip('💡 Flash ' + s.fl + ' %'));
-  if (s.sir) c.appendChild(chip('🚨 Sirena sonando', 'bad'));
+  if (s.sir) c.appendChild(chip('🚨 Alarma sonando', 'bad'));
+  if (!s.c3) c.appendChild(chip('🔌 Módulo de audio (C3) sin conectar', 'warn'));
+  else if (s.c3rx > 10) c.appendChild(chip('🔌 El C3 no recibe órdenes: revisa el cable U0T → GPIO20 (RX)', 'bad'));
   c.appendChild(chip('⏱ Estado de hace ' + age + ' s'));
   // Señal en el vídeo
   const lv = w >= -55 ? 4 : w >= -65 ? 3 : w >= -72 ? 2 : 1;
@@ -853,6 +923,7 @@ function onPlayFrame(r) {
 
 // ---------- mensajes ----------
 async function onMsg(topic, m) {
+  stats.msgs++;
   if (topic === topics.online) { online = dec.decode(m) === '1'; renderStatus(); return; }
   if (topic === topics.play) {
     if (mode !== 'play') return;
@@ -890,7 +961,7 @@ async function onMsg(topic, m) {
   } else if (topic === topics.status && r.type === T_STATUS) {
     if (r.ts <= lastStatusTs) return;              // no acepta estados más antiguos (repetición)
     const prev = status;
-    lastStatusTs = r.ts; status = JSON.parse(dec.decode(r.data)); renderStatus();
+    lastStatusTs = r.ts; status = JSON.parse(dec.decode(r.data)); stats.status++; renderStatus();
     if (prev && prev.sir && !status.sir) toast('🔕 La sirena se ha parado');
   } else if (topic === topics.alert && r.type === T_ALERT) {
     if (r.ts <= lastAlertTs) return;
@@ -902,6 +973,7 @@ async function onMsg(topic, m) {
   }
 }
 function onState(ok, err) {
+  log(ok ? 'Conectado al broker (cifrado E2E)' : 'Desconectado del broker' + (err ? ': ' + err : ''));
   if (!ok) { placeholder(err || 'Reconectando…'); if (err) toast(err, 'bad'); }
   else { placeholder(mode === 'live' ? 'Esperando vídeo en directo…' : 'Cargando la grabación…'); sendCmd({ c: 'watch', v: viewerId }); if (tab === 'rec' && !daysLoaded) sendCmd({ c: 'days' }); }
   renderStatus();
@@ -915,7 +987,8 @@ function servo(a) {
 }
 function showTab(t) {
   tab = t;
-  for (const x of ['live', 'rec', 'set']) $('tab-' + x).hidden = x !== t;
+  for (const x of ['live', 'rec', 'set', 'dev']) $('tab-' + x).hidden = x !== t;
+  if (t === 'dev') renderDev();
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('sel', b.dataset.tab === t));
   if (t === 'rec' && !daysLoaded) sendCmd({ c: 'days' });
 }
@@ -923,9 +996,9 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b
 
 $('armBtn').onclick = () => {
   const armed = !!(status && status.armed);
-  if (armed && !confirm('¿Desactivar la vigilancia? No llegarán alertas hasta que la vuelvas a activar.')) return;
+  if (armed && !confirm('¿Desactivar la alarma? No llegarán avisos de movimiento hasta que la vuelvas a activar.')) return;
   sendCmd({ c: 'arm', a: armed ? 0 : 1 });
-  toast(armed ? '🔓 Desactivando vigilancia…' : '🛡️ Activando vigilancia…');
+  toast(armed ? '🔓 Desactivando la alarma…' : '🛡️ Activando la alarma: tienes 1 minuto para salir');
 };
 $('aListen').onclick = toggleListen; $('oListen').onclick = toggleListen;
 $('oSnap').onclick = snapshot;
@@ -986,6 +1059,94 @@ $('alertPlay').onclick = () => {
   const d = new Date(lastAlertTs);
   startPlay(d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()), pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()), 5);
 };
+
+// ---------- pestaña de desarrollo ----------
+// La contraseña solo oculta herramientas de diagnóstico: no es una barrera de seguridad (el código
+// del visor es público). Todo lo que hace pasa por las órdenes cifradas, igual que el resto.
+const DEV_HASH = 'd2b3d94e21cb66c2a7f9640d09d72294a67357937c06a7e23257442b449fd9eb';
+try { devUnlocked = sessionStorage.getItem('dev') === '1'; } catch (e) {}
+async function devTry() {
+  const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode($('devPass').value))), b => b.toString(16).padStart(2, '0')).join('');
+  $('devPass').value = '';
+  if (h !== DEV_HASH) { toast('Contraseña incorrecta', 'bad'); return; }
+  devUnlocked = true; try { sessionStorage.setItem('dev', '1'); } catch (e) {}
+  renderDev();
+}
+$('devGo').onclick = devTry;
+$('devPass').onkeydown = e => { if (e.key === 'Enter') devTry(); };
+$('devLock2').onclick = () => { devUnlocked = false; try { sessionStorage.removeItem('dev'); } catch (e) {} renderDev(); };
+function tile(title, val, note, cls) {
+  const d = document.createElement('div'); d.className = 'tile ' + (cls || '');
+  const a = document.createElement('small'); a.textContent = title;
+  const b = document.createElement('b'); b.textContent = val;
+  const c = document.createElement('i'); c.textContent = note || '';
+  d.append(a, b, c); return d;
+}
+let vfPrev = null, vfAt = 0, vfRate = 0;
+function renderDev() {
+  $('devLock').hidden = devUnlocked; $('devBody').hidden = !devUnlocked;
+  if (!devUnlocked) return;
+  const s = status || {}, box = $('devTiles'); box.textContent = '';
+  const age = lastStatusTs ? Math.round((camNow() - lastStatusTs) / 1000) : null;
+  if (s.vf !== undefined) {
+    const now = Date.now();
+    if (vfPrev !== null && now - vfAt > 1500) { vfRate = Math.max(0, (s.vf - vfPrev) / ((now - vfAt) / 1000)); vfPrev = s.vf; vfAt = now; }
+    if (vfPrev === null) { vfPrev = s.vf; vfAt = now; }
+  }
+  const lag = lastFrameTs ? (camNow() - lastFrameTs) / 1000 : null;
+  box.append(
+    tile('Broker', mq && mq.ok ? 'Conectado' : 'Desconectado', 'mensajes recibidos: ' + stats.msgs, mq && mq.ok ? 'ok' : 'bad'),
+    tile('Cámara', age !== null && age < 75 ? 'En línea' : 'Sin datos', age !== null ? 'estado de hace ' + age + ' s · activa ' + Math.round((s.up || 0) / 60) + ' min' : '', age !== null && age < 75 ? 'ok' : 'warn'),
+    tile('WiFi', s.rssi !== undefined ? s.rssi + ' dBm' : '—', s.rssi >= -60 ? 'buena' : s.rssi >= -72 ? 'justa' : 'débil', s.rssi >= -60 ? 'ok' : s.rssi >= -72 ? 'warn' : 'bad'),
+    tile('Memoria interna', s.hp !== undefined ? s.hp + ' KB libres' : '—', s.hb !== undefined ? 'bloque mayor ' + s.hb + ' KB' : '', s.hb >= 40 ? 'ok' : s.hb >= 25 ? 'warn' : 'bad'),
+    tile('Vídeo', frames + ' fps aquí', 'cámara envía ' + vfRate.toFixed(1) + ' fps · calidad ' + (s.q || '—') + (lag !== null && lag > 3 ? ' · sin vídeo ' + Math.round(lag) + ' s' : ''), lag !== null && lag < 3 ? 'ok' : 'warn'),
+    tile('Visores', (s.vw || 0) + ' mirando', 'el caudal se reparte entre ellos'),
+    tile('Alarma', s.armed ? (s.ex > 0 ? 'Activándose (' + s.ex + ' s)' : 'Activada') : 'Desactivada', s.sir ? '🚨 sonando' : 'en silencio', s.sir ? 'bad' : s.armed ? 'ok' : ''),
+    tile('PIR', s.pir ? 'MOVIMIENTO' : 'Quieto', s.motion ? 'último: ' + fmt(s.motion) : 'sin movimiento', s.pir ? 'warn' : 'ok'),
+    tile('Micrófono', s.mic === 1 ? 'Nivel ' + s.snd : s.mic === 2 ? 'Desactivado' : 'Sin datos', 'umbral de ruido ' + (s.nl || '—'), s.mic === 1 ? 'ok' : 'warn'),
+    tile('Altavoz', !s.c3 ? '—' : s.sb ? ((s.sb & 4) ? 'Voz en directo' : (s.sb & 2) ? 'Mensaje' : 'Sonido') : 'En silencio', 'mensajes: ' + [1, 2, 3, 4].map(k => (s.vm & (1 << (k - 1))) ? k : '·').join(' ')),
+    tile('C3 → cámara', s.c3 ? 'OK (v' + s.c3 + ')' : 'Sin datos', s.c3a >= 0 ? 'último paquete hace ' + s.c3a + ' s' : 'nunca', s.c3 ? 'ok' : 'bad'),
+    tile('Cámara → C3', !s.c3 ? '—' : s.c3rx <= 10 ? 'OK' : s.c3rx === 255 ? 'Nunca recibió' : 'Hace ' + s.c3rx + ' s', s.c3rx > 10 ? 'cable U0T → GPIO20 (RX)' : 'órdenes y voz', !s.c3 ? '' : s.c3rx <= 10 ? 'ok' : 'bad'),
+    tile('Tarjeta SD', s.sd >= 0 ? (s.sd / 1024).toFixed(1) + ' GB libres' : 'Sin tarjeta', s.rec ? 'grabando' : 'sin grabar', s.sd >= 0 ? 'ok' : 'warn'),
+    tile('Reloj', clockOffset === null ? '—' : (clockOffset / 1000).toFixed(1) + ' s', 'diferencia con la cámara', Math.abs(clockOffset || 0) > 30000 ? 'warn' : 'ok')
+  );
+  $('devRaw').textContent = status ? JSON.stringify(status, null, 1) : '—';
+  $('devLog').textContent = logLines.slice().reverse().join('\n');
+  renderShow();
+}
+setInterval(() => { if (tab === 'dev' && devUnlocked && topics) { sendCmd({ c: 'diag' }); renderDev(); } }, 2000);
+document.querySelectorAll('[data-servo]').forEach(b => b.onclick = () => servo(+b.dataset.servo));
+$('devSweep').onclick = () => { [0, 45, 90, 135, 180, 90].forEach((a, i) => setTimeout(() => servo(a), i * 900)); };
+document.querySelectorAll('[data-tone]').forEach(b => b.onclick = () => sendCmd({ c: 'tone', a: +b.dataset.tone }));
+document.querySelectorAll('[data-flash]').forEach(b => b.onclick = () => sendCmd({ c: 'flash', a: +b.dataset.flash }));
+$('devBlink').onclick = () => sendCmd({ c: 'blink' });
+// Elementos visibles del visor (se guardan en este dispositivo)
+const SHOW = [['cardActions', 'Accesos rápidos (Escuchar, Hablar, Flash, Sirena)'], ['cardServo', 'Orientación (servo)'],
+  ['cardStatus', 'Estado'], ['alertCard', 'Última alerta'], ['panL', 'Flechas sobre el vídeo'], ['oFs', 'Botón de pantalla completa']];
+let hidden = [];
+try { hidden = JSON.parse(localStorage.getItem('cam-hide') || '[]'); } catch (e) {}
+function applyShow() {
+  for (const [id] of SHOW) {
+    const ids = id === 'panL' ? ['panL', 'panR'] : [id];
+    ids.forEach(x => $(x).classList.toggle('uhide', hidden.includes(id)));
+  }
+}
+function renderShow() {
+  const box = $('devShow'); if (box.children.length) return;
+  for (const [id, name] of SHOW) {
+    const row = document.createElement('div'); row.className = 'row';
+    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = name;
+    const sw = document.createElement('button'); sw.className = 'sw' + (hidden.includes(id) ? '' : ' on');
+    sw.onclick = () => {
+      hidden = hidden.includes(id) ? hidden.filter(x => x !== id) : hidden.concat(id);
+      sw.classList.toggle('on', !hidden.includes(id));
+      try { localStorage.setItem('cam-hide', JSON.stringify(hidden)); } catch (e) {}
+      applyShow();
+    };
+    row.append(l, sw); box.appendChild(row);
+  }
+}
+applyShow();
 
 // ---------- "Recordar en este dispositivo": IndexedDB con claves NO extraíbles ----------
 function idbOpen() {
