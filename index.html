@@ -3,108 +3,299 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-+v9bc/z+7GosGT70AB/UUmthJgBAcHkHsUJaHubBBd4='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-R74y9GX0EfMk8PMvb87Q77QWzNba2dVEzPfaYCZGbUA='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#0b0d12">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Cámara</title>
 <style>
-:root{--bg:#0f1115;--card:#181b22;--txt:#e8eaed;--mut:#9aa0a6;--acc:#3b82f6;--ok:#22c55e;--bad:#ef4444}
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);padding:env(safe-area-inset-top) 12px 24px}
-h1{font-size:20px;margin:20px 0 12px}h2{font-size:15px;color:var(--mut);margin:22px 0 8px}
-label{display:block;margin:10px 0;font-size:14px;color:var(--mut)}
-input:not([type=checkbox]):not([type=range]){display:block;width:100%;margin-top:4px;padding:12px;border-radius:10px;border:1px solid #2a2f3a;background:var(--card);color:var(--txt);font-size:16px}
-.chk{display:flex;gap:8px;align-items:center;color:var(--txt)}
-button{font-size:16px;padding:12px 16px;border:0;border-radius:10px;background:var(--acc);color:#fff}
-button:disabled{opacity:.5}button.sec{background:#2a2f3a}
-#go{width:100%;margin-top:12px}
-.err{color:var(--bad);font-size:14px;min-height:20px}
-.bar{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--mut);margin:10px 0}
-#dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
-#fps{margin-left:auto}
-.video{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:4/3}
-.video img{width:100%;height:100%;object-fit:contain;display:block}
-#ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut)}
-#ph[hidden]{display:none}
-.row{display:flex;gap:8px;align-items:center;margin:12px 0}
-input[type=range]{flex:1}
-#st{font-size:13px;color:var(--mut);line-height:1.5}
-#alert{width:100%;border-radius:12px;background:#000;min-height:40px}
-#alertt{font-size:13px;color:var(--mut);margin-top:4px}
-#pb{display:none;font-size:14px;color:#fbbf24;margin:6px 0}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
-.chips button{padding:8px 10px;font-size:14px;background:#2a2f3a}
-.chips button.ev{background:#7f1d1d}
-select,input[type=time]{font-size:16px;padding:10px;border-radius:10px;border:1px solid #2a2f3a;background:var(--card);color:var(--txt)}
-.small{font-size:13px;color:var(--mut)}
-#msg{font-size:13px;color:var(--bad);min-height:18px}
-.note{font-size:12px;color:var(--mut);margin:-4px 0 8px 26px}
+:root{
+  --bg:#0b0d12;--surface:#141821;--surface2:#1c212c;--line:#262c39;
+  --txt:#eef1f6;--mut:#8b93a5;--acc:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;
+  --r:16px;--nav:64px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding-top:env(safe-area-inset-top)}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input,select{font:inherit}
+[hidden]{display:none!important}
+
+/* ---------- acceso ---------- */
+#login{max-width:440px;margin:0 auto;padding:28px 20px 40px}
+.brand{display:flex;align-items:center;gap:12px;margin:8px 0 24px}
+.brand .logo{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:grid;place-items:center;font-size:22px}
+.brand h1{font-size:22px;margin:0}.brand p{margin:2px 0 0;color:var(--mut);font-size:13px}
+.field{display:block;margin:0 0 14px}
+.field span{display:block;font-size:13px;color:var(--mut);margin:0 0 6px}
+.field input{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--txt);font-size:16px}
+.field input:focus{outline:2px solid var(--acc);border-color:transparent}
+details.adv{margin:4px 0 16px;color:var(--mut);font-size:14px}
+details.adv summary{cursor:pointer;padding:6px 0}
+.check{display:flex;gap:12px;align-items:flex-start;padding:10px 0;font-size:14px}
+.check input{width:20px;height:20px;margin:1px 0 0;accent-color:var(--acc)}
+.check small{display:block;color:var(--mut);font-size:12px;margin-top:2px}
+.primary{width:100%;padding:15px;border-radius:12px;background:var(--acc);color:#fff;font-weight:600;font-size:16px}
+.primary:disabled{opacity:.55}
+.lerr{color:var(--bad);font-size:14px;min-height:20px;margin-top:12px}
+
+/* ---------- cabecera ---------- */
+header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(11,13,18,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+header h2{font-size:17px;margin:0;flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:var(--surface2);font-size:12px;color:var(--mut);white-space:nowrap}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--mut)}
+.pill.ok i{background:var(--ok);box-shadow:0 0 0 3px rgba(34,197,94,.2)}
+.pill.bad i{background:var(--bad)}.pill.warn i{background:var(--warn)}
+
+/* ---------- reproductor ---------- */
+.player{position:relative;background:#000;aspect-ratio:4/3;max-height:62vh;width:100%;overflow:hidden;user-select:none}
+.player img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.player img:not([src]),.alertimg:not([src]){visibility:hidden}
+.ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--mut);font-size:14px;text-align:center;padding:20px}
+.spin{width:28px;height:28px;border:3px solid #2a3140;border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 10px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ov{position:absolute;left:0;right:0;display:flex;align-items:center;gap:8px;padding:10px;pointer-events:none}
+.ov.top{top:0;background:linear-gradient(rgba(0,0,0,.55),transparent)}
+.ov.bot{bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.65));justify-content:space-between}
+.ov *{pointer-events:auto}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.3px}
+.badge.live{background:rgba(239,68,68,.9)}
+.badge.live::before{content:"";width:7px;height:7px;border-radius:50%;background:#fff;animation:bl 1.4s infinite}
+.badge.rec{background:rgba(245,158,11,.92);color:#111}
+@keyframes bl{50%{opacity:.25}}
+.meta{margin-left:auto;font-size:12px;color:#dfe3ea;text-shadow:0 1px 2px #000;display:flex;gap:10px;align-items:center}
+.bars{display:inline-flex;gap:2px;align-items:flex-end;height:12px}
+.bars b{width:3px;background:#5c6475;border-radius:1px}
+.bars b:nth-child(1){height:4px}.bars b:nth-child(2){height:7px}.bars b:nth-child(3){height:10px}.bars b:nth-child(4){height:12px}
+.bars b.on{background:#fff}
+.obtn{width:42px;height:42px;border-radius:50%;background:rgba(20,24,33,.7);display:grid;place-items:center;font-size:18px;backdrop-filter:blur(6px)}
+.obtn.on{background:var(--acc)}
+.obtn.warn{background:var(--warn);color:#111}
+.ogroup{display:flex;gap:8px}
+.pan{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:72px;border-radius:12px;background:rgba(20,24,33,.45);font-size:22px;display:grid;place-items:center}
+.pan.l{left:8px}.pan.r{right:8px}
+.player.fs{position:fixed;inset:0;z-index:100;max-height:none;aspect-ratio:auto}
+
+/* ---------- contenido ---------- */
+main{padding:14px 14px calc(var(--nav) + 24px + env(safe-area-inset-bottom));max-width:720px;margin:0 auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:0 0 12px}
+.card h3{margin:0 0 10px;font-size:13px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
+.arm{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:16px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);margin:0 0 12px}
+.arm .ic{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:24px;background:var(--surface2)}
+.arm b{display:block;font-size:17px}.arm span{font-size:13px;color:var(--mut)}
+.arm.on{border-color:rgba(34,197,94,.45);background:linear-gradient(135deg,rgba(34,197,94,.14),var(--surface))}
+.arm.on .ic{background:rgba(34,197,94,.2)}
+.arm .sw{margin-left:auto}
+.sw{position:relative;width:50px;height:30px;border-radius:999px;background:#39404f;flex:none;transition:.2s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s}
+.sw.on{background:var(--ok)}.sw.on::after{left:23px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 12px}
+.act{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-size:12px;color:var(--mut)}
+.act .e{font-size:22px;line-height:1}
+.act.on{background:rgba(59,130,246,.16);border-color:rgba(59,130,246,.5);color:var(--txt)}
+.act.danger.on{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.6)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--surface2);font-size:12.5px;color:#cfd5df}
+.chip.warn{color:var(--warn)}.chip.bad{color:var(--bad)}.chip.ok{color:var(--ok)}
+.row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row .lbl{flex:1}.row .lbl small{display:block;color:var(--mut);font-size:12px}
+.row output{min-width:46px;text-align:right;color:var(--mut);font-variant-numeric:tabular-nums}
+input[type=range]{flex:1;accent-color:var(--acc);min-width:0}
+select{padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--txt)}
+.ghost{padding:9px 14px;border-radius:10px;background:var(--surface2);font-size:14px}
+.danger-btn{padding:12px;border-radius:12px;background:rgba(239,68,68,.12);color:#fca5a5;width:100%;font-weight:600}
+.meter{height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;margin-top:6px;position:relative}
+.meter i{position:absolute;left:0;top:0;bottom:0;background:var(--ok);transition:width .4s}
+.meter u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--warn)}
+.alertimg{width:100%;border-radius:12px;background:#000;display:block}
+.muted{color:var(--mut);font-size:13px}
+
+/* ---------- grabaciones ---------- */
+.days{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.day{flex:none;padding:8px 14px;border-radius:999px;background:var(--surface2);font-size:14px}
+.day.sel{background:var(--acc);color:#fff}
+.tl{position:relative;height:46px;border-radius:10px;background:var(--surface2);overflow:hidden;touch-action:pan-y}
+.tl .h{position:absolute;top:0;bottom:0;background:rgba(59,130,246,.35)}
+.tl .ev{position:absolute;top:0;bottom:0;width:2px;background:var(--bad)}
+.tl .cur{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;box-shadow:0 0 6px #fff}
+.tlx{display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-top:4px}
+.evl{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto}
+.evl li button{width:100%;display:flex;align-items:center;gap:10px;padding:11px 4px;border-top:1px solid var(--line);text-align:left}
+.evl li:first-child button{border-top:0}
+.evl .dot{width:8px;height:8px;border-radius:50%;background:var(--bad)}
+.evl .t{font-variant-numeric:tabular-nums;font-weight:600}
+.seg{display:inline-flex;background:var(--surface2);border-radius:10px;padding:3px}
+.seg button{padding:6px 11px;border-radius:8px;font-size:13px;color:var(--mut)}
+.seg button.sel{background:var(--acc);color:#fff}
+.playbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.playbar #pbTxt{flex:1 1 100%}
+.playbar .ghost{margin-left:auto}
+
+/* ---------- navegación inferior ---------- */
+nav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;height:calc(var(--nav) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:rgba(15,18,25,.96);backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11.5px;color:var(--mut)}
+nav button .e{font-size:20px;filter:grayscale(1);opacity:.7}
+nav button.sel{color:var(--txt)}nav button.sel .e{filter:none;opacity:1}
+
+/* ---------- avisos ---------- */
+#toast{position:fixed;left:50%;bottom:calc(var(--nav) + 16px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);opacity:0;z-index:50;max-width:92vw;padding:12px 16px;border-radius:12px;background:#222838;border:1px solid var(--line);font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);transition:.25s;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%)}
+#toast.bad{border-color:rgba(239,68,68,.6)}#toast.warn{border-color:rgba(245,158,11,.6)}
 </style>
 </head>
 <body>
 
+<!-- ======================= ACCESO ======================= -->
 <section id="login">
-  <h1>🔒 Cámara cifrada</h1>
-  <label>Broker (WebSocket seguro)<input id="host" value="wss://mqtt.flespi.io" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-  <label>Token flespi del visor<input id="user" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-  <label>Contraseña MQTT (en flespi déjala vacía)<input id="mpass" type="password" autocomplete="off"></label>
-  <label>ID de la cámara<input id="dev" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-  <label>Frase secreta<input id="phrase" type="password" autocomplete="off"></label>
-  <label class="chk"><input type="checkbox" id="remember"> Recordar broker e ID (nunca token ni claves)</label>
-  <label class="chk"><input type="checkbox" id="persist"> Recordar en este dispositivo (abrir sin escribir nada)</label>
-  <p class="note">Solo en tu móvil personal y con bloqueo de pantalla. Las claves se guardan de forma que ninguna página ni app pueda extraerlas, pero cualquiera con tu móvil desbloqueado podrá ver la cámara.</p>
-  <button id="go">Conectar</button>
-  <p class="err" id="lerr"></p>
+  <div class="brand"><div class="logo">📷</div><div><h1>Cámara</h1><p>Vídeo cifrado de extremo a extremo</p></div></div>
+  <label class="field"><span>Token del visor (flespi)</span><input id="user" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+  <label class="field"><span>ID de la cámara</span><input id="dev" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+  <label class="field"><span>Frase secreta</span><input id="phrase" type="password" autocomplete="off"></label>
+  <label class="check"><input type="checkbox" id="persist"><span>Recordar en este dispositivo<small>Solo en tu móvil personal con bloqueo de pantalla. Las claves se guardan de forma que no se pueden extraer, pero quien desbloquee el móvil podrá ver la cámara.</small></span></label>
+  <details class="adv"><summary>Opciones avanzadas</summary>
+    <label class="field"><span>Broker (WebSocket seguro)</span><input id="host" value="wss://mqtt.flespi.io" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label class="field"><span>Contraseña MQTT (en flespi, vacía)</span><input id="mpass" type="password" autocomplete="off"></label>
+    <label class="check"><input type="checkbox" id="remember"><span>Recordar broker e ID<small>Nunca el token ni las claves.</small></span></label>
+  </details>
+  <button class="primary" id="go">Conectar</button>
+  <p class="lerr" id="lerr"></p>
 </section>
 
+<!-- ======================= APLICACIÓN ======================= -->
 <section id="app" hidden>
-  <div class="bar"><span id="dot"></span><span id="conn">Conectando…</span><span id="fps"></span></div>
-  <div class="video"><img id="cam" alt=""><div id="ph">Esperando vídeo…</div></div>
-  <div id="pb"></div>
-  <div class="row"><button class="sec" id="back" hidden>⏺ Volver al directo</button></div>
-  <div id="msg"></div>
-  <div class="row">
-    <button data-d="20">◀</button>
-    <input type="range" id="ang" min="0" max="180" value="90">
-    <button data-d="-20">▶</button>
+  <header>
+    <h2>Cámara</h2>
+    <span class="pill" id="online"><i></i><span>Conectando…</span></span>
+  </header>
+
+  <div class="player" id="player">
+    <img id="cam" alt="">
+    <div class="ph" id="ph"><div><div class="spin"></div><span id="phTxt">Conectando con la cámara…</span></div></div>
+    <div class="ov top">
+      <span class="badge live" id="bLive">EN DIRECTO</span>
+      <span class="badge rec" id="bRec" hidden>GRABACIÓN</span>
+      <span class="meta"><span id="fps"></span><span class="bars" id="bars" title="WiFi"><b></b><b></b><b></b><b></b></span></span>
+    </div>
+    <button class="pan l" id="panL" aria-label="Girar a la izquierda">‹</button>
+    <button class="pan r" id="panR" aria-label="Girar a la derecha">›</button>
+    <div class="ov bot">
+      <div class="ogroup">
+        <button class="obtn" id="oListen" aria-label="Escuchar">🔇</button>
+        <button class="obtn" id="oSnap" aria-label="Guardar foto">📸</button>
+      </div>
+      <div class="ogroup">
+        <button class="obtn" id="oLive" hidden aria-label="Volver al directo">⏺</button>
+        <button class="obtn" id="oFs" aria-label="Pantalla completa">⛶</button>
+      </div>
+    </div>
   </div>
-  <div class="row">
-    <span id="angv">90°</span>
-    <button class="sec" id="center">Centro</button>
-    <button class="sec" id="save">Guardar foto</button>
-  </div>
-  <div class="row"><label class="chk"><input type="checkbox" id="armed"> Alarma armada</label></div>
-  <div class="row"><label class="chk"><input type="checkbox" id="conf"> Confirmar movimiento con la cámara (menos falsas alarmas)</label></div>
-  <div class="row"><span>💡 Flash</span><input type="range" id="flash" min="0" max="100" step="10" value="0"><span id="flv">0 %</span><button class="sec" id="floff">Apagar</button></div>
-  <h2>Audio</h2>
-  <div class="row"><button id="listen">🔊 Escuchar</button><span id="sndlvl" class="small"></span></div>
-  <div class="row"><label class="chk"><input type="checkbox" id="mic"> Micrófono de la cámara (directo y grabación)</label></div>
-  <div class="row"><label class="chk"><input type="checkbox" id="noise"> Alerta por ruido fuerte</label></div>
-  <div class="row"><span>Umbral de ruido</span><input type="range" id="nlvl" min="30" max="100" value="75"><span id="nlv">75</span></div>
-  <h2>Sirena</h2>
-  <div class="row"><button id="siren">🚨 Activar sirena</button></div>
-  <div class="row"><label class="chk"><input type="checkbox" id="sir"> Sirena al detectar intrusión</label></div>
-  <div class="row"><span>Duración</span><select id="sirs"><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option><option value="120">120 s</option></select></div>
-  <div class="row"><span>Volumen sirena</span><input type="range" id="svol" min="5" max="100" step="5" value="100"><span id="svv">100 %</span></div>
-  <div class="row"><label class="chk"><input type="checkbox" id="beep"> Pitidos al salir y al armar/desarmar</label></div>
-  <div class="row"><span>Volumen pitidos</span><input type="range" id="bvol" min="5" max="100" step="5" value="40"><span id="bvv">40 %</span></div>
-  <div class="row small">Al soltar el deslizador, la cámara suena 1 s con el volumen elegido.</div>
-  <div id="st"></div>
-  <h2>Grabaciones</h2>
-  <div class="row"><button class="sec" id="recload">Ver grabaciones</button><select id="days" hidden></select></div>
-  <div id="recinfo" class="small"></div>
-  <div class="chips" id="evs"></div>
-  <div class="chips" id="hours"></div>
-  <div class="row" id="playrow" hidden>
-    <input type="time" id="ptime" step="1" value="00:00:00">
-    <select id="speed"><option value="1">x1</option><option value="2">x2</option><option value="4">x4</option><option value="8">x8</option></select>
-    <button id="pgo">▶ Reproducir</button>
-  </div>
-  <h2>Última alerta</h2>
-  <img id="alert" alt="">
-  <div id="alertt">Sin alertas</div>
-  <div class="row"><button class="sec" id="logout">Cerrar sesión</button></div>
+
+  <main>
+    <!-- ---------- DIRECTO ---------- -->
+    <div id="tab-live">
+      <button class="arm" id="armBtn">
+        <span class="ic" id="armIc">🛡️</span>
+        <span><b id="armTitle">Vigilancia</b><span id="armSub">Esperando estado…</span></span>
+        <span class="sw" id="armSw"></span>
+      </button>
+
+      <div class="grid">
+        <button class="act" id="aListen"><span class="e">🔊</span>Escuchar</button>
+        <button class="act" id="aFlash"><span class="e">💡</span>Flash</button>
+        <button class="act danger" id="aSiren"><span class="e">🚨</span>Sirena</button>
+        <button class="act" id="aSnap"><span class="e">📸</span>Foto</button>
+      </div>
+
+      <div class="card">
+        <h3>Orientación</h3>
+        <div class="row"><input type="range" id="ang" min="0" max="180" value="90"><output id="angv">90°</output><button class="ghost" id="center">Centrar</button></div>
+      </div>
+
+      <div class="card">
+        <h3>Estado</h3>
+        <div class="chips" id="chips"><span class="chip">Esperando datos de la cámara…</span></div>
+      </div>
+
+      <div class="card" id="alertCard" hidden>
+        <h3>Última alerta</h3>
+        <img class="alertimg" id="alert" alt="">
+        <div class="row"><span class="lbl" id="alertt"></span><button class="ghost" id="alertPlay">▶ Ver grabación</button></div>
+      </div>
+    </div>
+
+    <!-- ---------- GRABACIONES ---------- -->
+    <div id="tab-rec" hidden>
+      <div class="card" id="playCard" hidden>
+        <div class="playbar">
+          <span id="pbTxt" class="muted">Cargando…</span>
+          <span class="seg" id="speedSeg"><button data-s="1" class="sel">x1</button><button data-s="2">x2</button><button data-s="4">x4</button><button data-s="8">x8</button></span>
+          <button class="ghost" id="backLive">⏺ Directo</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Día</h3>
+        <div class="days" id="days"><span class="muted" id="recinfo">Consultando la tarjeta…</span></div>
+        <div id="dayView" hidden>
+          <div class="tl" id="tl"></div>
+          <div class="tlx"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+          <p class="muted" style="margin:8px 0 0">Toca la barra para reproducir desde esa hora. En rojo, los eventos.</p>
+          <div class="row" style="border-top:0;padding-bottom:0"><span class="lbl">Ir a una hora exacta</span><input type="time" id="ptime" step="1" value="00:00:00" style="padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--txt)"><button class="ghost" id="pgo">▶</button></div>
+        </div>
+      </div>
+
+      <div class="card" id="evCard" hidden>
+        <h3 id="evTitle">Eventos</h3>
+        <ul class="evl" id="evs"></ul>
+      </div>
+    </div>
+
+    <!-- ---------- AJUSTES ---------- -->
+    <div id="tab-set" hidden>
+      <div class="card">
+        <h3>Detección</h3>
+        <div class="row"><span class="lbl">Confirmar con la cámara<small>El PIR solo alerta si además cambia la imagen (de día)</small></span><button class="sw" id="conf"></button></div>
+        <div class="row"><span class="lbl">Alerta por ruido fuerte</span><button class="sw" id="noise"></button></div>
+        <div class="row"><span class="lbl">Umbral de ruido<small id="sndTxt">Nivel actual: —</small><span class="meter"><i id="sndBar" style="width:0"></i><u id="sndThr" style="left:75%"></u></span></span><input type="range" id="nlvl" min="30" max="100" value="75" style="max-width:40%"><output id="nlv">75</output></div>
+      </div>
+
+      <div class="card">
+        <h3>Sirena</h3>
+        <div class="row"><span class="lbl">Sonar al detectar intrusión</span><button class="sw" id="sir"></button></div>
+        <div class="row"><span class="lbl">Duración</span><select id="sirs"><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option><option value="120">2 min</option></select></div>
+        <div class="row"><span class="lbl">Volumen</span><input type="range" id="svol" min="5" max="100" step="5" value="100"><output id="svv">100 %</output></div>
+      </div>
+
+      <div class="card">
+        <h3>Pitidos</h3>
+        <div class="row"><span class="lbl">Al salir y al armar/desarmar</span><button class="sw" id="beep"></button></div>
+        <div class="row"><span class="lbl">Volumen</span><input type="range" id="bvol" min="5" max="100" step="5" value="40"><output id="bvv">40 %</output></div>
+        <p class="muted" style="margin:6px 0 0">Al soltar un deslizador de volumen, la cámara suena 1 s para que lo oigas.</p>
+      </div>
+
+      <div class="card">
+        <h3>Imagen y audio</h3>
+        <div class="row"><span class="lbl">Intensidad del flash</span><input type="range" id="flash" min="0" max="100" step="10" value="0"><output id="flv">0 %</output></div>
+        <div class="row"><span class="lbl">Micrófono<small>Directo y grabación</small></span><button class="sw" id="mic"></button></div>
+      </div>
+
+      <div class="card">
+        <h3>Sesión</h3>
+        <p class="muted" id="devInfo" style="margin:0 0 12px"></p>
+        <button class="danger-btn" id="logout">Cerrar sesión</button>
+      </div>
+    </div>
+  </main>
+
+  <nav>
+    <button class="sel" data-tab="live"><span class="e">📹</span>Directo</button>
+    <button data-tab="rec"><span class="e">🗂️</span>Grabaciones</button>
+    <button data-tab="set"><span class="e">⚙️</span>Ajustes</button>
+  </nav>
+  <div id="toast"></div>
 </section>
 
 <script>
@@ -113,10 +304,20 @@ select,input[type=time]{font-size:16px;padding:10px;border-radius:10px;border:1p
 if (window.top !== window.self) { document.body.textContent = ''; throw new Error('framed'); }
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const T_FRAME = 1, T_STATUS = 2, T_ALERT = 3, T_CMD = 0x10;
+const T_FRAME = 1, T_STATUS = 2, T_ALERT = 3, T_LIST = 4, T_AUDIO = 5, T_CMD = 0x10;
 let keys = null, mq = null, topics = null, remembered = false, devId = '';
-let mode = 'live', playLastTs = 0, playSpeed = 1, recDay = '';
-let lastFrameTs = 0, lastAlertTs = 0, frames = 0, lastCmdTs = 0;
+let mode = 'live', playLastTs = 0, playSpeed = 1, recDay = '', playStartedAt = 0, playFrames = 0;
+let lastFrameTs = 0, lastAlertTs = 0, frames = 0, lastCmdTs = 0, tab = 'live', daysLoaded = false, dayData = null;
+let status = null, lastStatusTs = 0, online = null, frameBlob = null, hiddenAt = 0, flashLast = 100;
+const urls = {}, dragging = {};
+
+// ---------- avisos ----------
+let toastT = 0;
+function toast(txt, kind) {
+  const t = $('toast'); t.textContent = txt; t.className = 'show ' + (kind || '');
+  clearTimeout(toastT); toastT = setTimeout(() => { t.className = ''; }, kind === 'bad' ? 6000 : 3500);
+}
+
 // Reloj de la cámara (hora autenticada por HTTPS): se estima con los mensajes cifrados que llegan,
 // quedándose con el más adelantado (el de menos retraso). Así un móvil o PC con la hora mal
 // funciona igual. Un mensaje antiguo repetido no puede adelantar esta estimación.
@@ -130,19 +331,19 @@ function learnClock(ts) {
   }
   if (!clockWarned && Math.abs(clockOffset) > 30000) {
     clockWarned = true;
-    $('msg').textContent = '⏱ La hora de este dispositivo va ' + Math.round(Math.abs(clockOffset) / 1000) +
-      ' s ' + (clockOffset > 0 ? 'atrasada' : 'adelantada') + '. Se corrige sola, pero conviene activar la hora automática.';
+    toast('⏱ La hora de este dispositivo va ' + Math.round(Math.abs(clockOffset) / 1000) + ' s ' +
+      (clockOffset > 0 ? 'atrasada' : 'adelantada') + '. Se corrige sola; conviene activar la hora automática.', 'warn');
   }
 }
-let status = null, lastStatusTs = 0, online = null, dragging = false, frameBlob = null, hiddenAt = 0;
-const urls = {};
 
 // ---------- utilidades binarias ----------
 function cat(...a) { let n = 0; for (const x of a) n += x.length; const o = new Uint8Array(n); let p = 0; for (const x of a) { o.set(x, p); p += x.length; } return o; }
 function mstr(s) { const b = enc.encode(s); return cat(new Uint8Array([b.length >> 8, b.length & 255]), b); }
 function rlen(n) { const o = []; do { let d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; o.push(d); } while (n > 0); return new Uint8Array(o); }
 function pkt(h, body) { return cat(new Uint8Array([h]), rlen(body.length), body); }
-function fmt(ts) { return new Date(ts).toLocaleString('es-ES'); }
+const pad2 = n => String(n).padStart(2, '0');
+function fmt(ts) { return new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+function fmtTime(ts) { return new Date(ts).toLocaleTimeString('es-ES'); }
 
 // ---------- cliente MQTT 3.1.1 mínimo sobre WebSocket seguro (sin dependencias) ----------
 class Mqtt {
@@ -214,7 +415,6 @@ async function derive(phrase, dev) {
     rec: await crypto.subtle.importKey('raw', await crypto.subtle.sign('HMAC', hk, enc.encode('rec')), 'AES-GCM', false, ['decrypt'])
   };
 }
-
 async function openWith(key, aad, m) {
   if (m.length < 38 || m[0] !== 1) throw new Error('formato');
   const pt = new Uint8Array(await crypto.subtle.decrypt(
@@ -222,10 +422,9 @@ async function openWith(key, aad, m) {
   return { ts: Number(new DataView(pt.buffer).getBigUint64(0)), type: pt[8], data: pt.slice(9) };
 }
 const openMsg = (topic, m) => openWith(keys.video, topic, m);
-const T_LIST = 4;
 
 async function sendCmd(obj) {
-  if (!mq || !mq.ok) return;
+  if (!mq || !mq.ok) return false;
   const ts = Math.max(camNow(), lastCmdTs + 1); lastCmdTs = ts;
   const j = enc.encode(JSON.stringify(obj));
   const pt = new Uint8Array(9 + j.length);
@@ -234,19 +433,10 @@ async function sendCmd(obj) {
   const ct = new Uint8Array(await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: enc.encode(topics.cmd), tagLength: 128 }, keys.cmd, pt));
   mq.publish(topics.cmd, cat(new Uint8Array([1]), iv, ct));
-}
-
-// ---------- interfaz ----------
-function showImg(img, data, k) {
-  const blob = new Blob([data], { type: 'image/jpeg' });
-  const url = URL.createObjectURL(blob), old = urls[k];
-  img.src = url; urls[k] = url;
-  if (old) setTimeout(() => URL.revokeObjectURL(old), 1000);
-  return blob;
+  return true;
 }
 
 // ---------- audio: IMA-ADPCM (bloques de 260 B = 512 muestras a 16 kHz) ----------
-const T_AUDIO = 5;
 const ADPCM_STEP = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
   107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796,
   876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428,
@@ -293,112 +483,197 @@ function playAudio(adpcm) {
   if (nextT < now + 0.05 || nextT > now + 2) nextT = now + 0.3;   // colchón de 300 ms
   src.start(nextT); nextT += buf.duration;
 }
+function toggleListen() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  actx.resume();
+  listening = !listening; nextT = 0;
+  if (listening && status && status.mic !== 1) toast(status.mic === 2 ? 'El micrófono está desactivado en Ajustes.' : 'La cámara no tiene micrófono conectado.', 'warn');
+  renderControls();
+}
 
+// ---------- imagen ----------
+function showImg(img, data, k) {
+  const blob = new Blob([data], { type: 'image/jpeg' });
+  const url = URL.createObjectURL(blob), old = urls[k];
+  img.src = url; urls[k] = url;
+  if (old) setTimeout(() => URL.revokeObjectURL(old), 1000);
+  return blob;
+}
+function showFrame(data) {
+  frameBlob = showImg($('cam'), data, 'cam');
+  $('ph').hidden = true;
+}
+function placeholder(txt) { $('phTxt').textContent = txt; $('ph').hidden = false; }
+function snapshot() {
+  if (!frameBlob) { toast('Todavía no hay imagen.'); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(frameBlob);
+  a.download = 'camara-' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg';
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('📸 Foto guardada');
+}
+
+// ---------- estado ----------
+function setSw(id, on) { $(id).classList.toggle('on', !!on); }
+function chip(txt, cls) { const s = document.createElement('span'); s.className = 'chip ' + (cls || ''); s.textContent = txt; return s; }
 function renderStatus() {
   // "En línea" se deduce del estado CIFRADO y reciente; el topic /o no está autenticado y solo es una pista
   const age = lastStatusTs ? Math.round((camNow() - lastStatusTs) / 1000) : null;
   const fresh = age !== null && age < 75;
-  const p = [fresh ? '🟢 Cámara en línea' : (online === false ? '🔴 Cámara desconectada' : '🟠 Sin datos recientes de la cámara')];
-  if (age !== null) p.push('estado de hace ' + age + ' s');
-  if (status) {
-    p.push(status.armed ? 'Alarma armada' : 'Alarma desarmada');
-    p.push('WiFi ' + status.rssi + ' dBm');
-    if (status.nt) p.push('🌙 Modo noche');
-    p.push(status.sd >= 0 ? ('SD: ' + (status.sd / 1024).toFixed(1) + ' GB libres' + (status.rec ? ' · grabando' : '')) : 'Sin tarjeta SD');
-    $('conf').checked = !!status.cf;
-    p.push(status.mic === 1 ? '🎙 Micrófono OK' : status.mic === 2 ? '🎙 Micrófono desactivado' : '🎙 Sin micrófono');
-    if (status.sir) p.push('🚨 SIRENA SONANDO');
-    $('mic').checked = !!status.me; $('noise').checked = !!status.na;
-    if (!nlDragging) { $('nlvl').value = status.nl; $('nlv').textContent = status.nl; }
-    if (status.sv !== undefined && volDragging !== 'svol') { $('svol').value = status.sv; $('svv').textContent = status.sv + ' %'; }
-    if (status.bv !== undefined && volDragging !== 'bvol') { $('bvol').value = status.bv; $('bvv').textContent = status.bv + ' %'; }
-    $('sndlvl').textContent = status.mic === 1 ? 'Nivel de sonido: ' + status.snd + ' (umbral ' + status.nl + ')' : '';
-    $('siren').textContent = status.sir ? '🔇 Parar sirena' : '🚨 Activar sirena';
-    $('sir').checked = !!status.sa; $('sirs').value = String(status.ss); $('beep').checked = !!status.bp;
-    if (!flDragging) { $('flash').value = status.fl || 0; $('flv').textContent = (status.fl || 0) + ' %'; }
-    p.push(status.motion ? 'Último movimiento: ' + fmt(status.motion) : 'Sin movimiento registrado');
-    $('armed').checked = !!status.armed;
-    if (!dragging) { $('ang').value = status.angle; $('angv').textContent = status.angle + '°'; }
-  }
-  $('st').textContent = p.join(' · ');
+  const pill = $('online');
+  pill.className = 'pill ' + (fresh ? 'ok' : online === false ? 'bad' : 'warn');
+  pill.lastChild.textContent = fresh ? 'En línea' : online === false ? 'Desconectada' : (mq && mq.ok ? 'Sin datos' : 'Conectando…');
+  if (!status) return;
+  const s = status;
+  // Vigilancia
+  $('armBtn').classList.toggle('on', !!s.armed); setSw('armSw', s.armed);
+  $('armIc').textContent = s.armed ? '🛡️' : '🔓';
+  $('armTitle').textContent = s.armed ? 'Vigilancia activada' : 'Vigilancia desactivada';
+  $('armSub').textContent = s.motion ? 'Último movimiento: ' + fmt(s.motion) : 'Sin movimiento registrado';
+  // Fichas de estado
+  const c = $('chips'); c.textContent = '';
+  const w = s.rssi;
+  c.appendChild(chip('📶 WiFi ' + w + ' dBm' + (w < -72 ? ' · débil' : ''), w >= -60 ? 'ok' : w >= -72 ? '' : 'warn'));
+  c.appendChild(chip(s.sd >= 0 ? '💾 ' + (s.sd / 1024).toFixed(1) + ' GB libres' + (s.rec ? ' · grabando' : '') : '💾 Sin tarjeta SD', s.sd >= 0 ? (s.rec ? 'ok' : '') : 'warn'));
+  c.appendChild(chip(s.mic === 1 ? '🎙 Micrófono OK' : s.mic === 2 ? '🎙 Micrófono desactivado' : '🎙 Sin micrófono', s.mic === 1 ? 'ok' : 'warn'));
+  if (s.nt) c.appendChild(chip('🌙 Modo noche'));
+  if (s.fl) c.appendChild(chip('💡 Flash ' + s.fl + ' %'));
+  if (s.sir) c.appendChild(chip('🚨 Sirena sonando', 'bad'));
+  c.appendChild(chip('⏱ Estado de hace ' + age + ' s'));
+  // Señal en el vídeo
+  const lv = w >= -55 ? 4 : w >= -65 ? 3 : w >= -72 ? 2 : 1;
+  [...$('bars').children].forEach((b, i) => b.classList.toggle('on', i < lv));
+  // Ajustes
+  setSw('conf', s.cf); setSw('noise', s.na); setSw('mic', s.me); setSw('sir', s.sa); setSw('beep', s.bp);
+  $('sirs').value = String(s.ss);
+  const setR = (id, out, v, suf) => { if (!dragging[id] && v !== undefined) { $(id).value = v; $(out).textContent = v + (suf || ''); } };
+  setR('nlvl', 'nlv', s.nl); setR('svol', 'svv', s.sv, ' %'); setR('bvol', 'bvv', s.bv, ' %');
+  setR('flash', 'flv', s.fl || 0, ' %'); setR('ang', 'angv', s.angle, '°');
+  if (s.fl) flashLast = s.fl;
+  $('sndTxt').textContent = s.mic === 1 ? 'Nivel actual: ' + s.snd + ' · salta por encima de ' + s.nl : 'Sin micrófono';
+  $('sndBar').style.width = (s.mic === 1 ? s.snd : 0) + '%';
+  $('sndBar').style.background = s.snd >= s.nl ? 'var(--bad)' : 'var(--ok)';
+  $('sndThr').style.left = s.nl + '%';
+  renderControls();
+}
+function renderControls() {
+  const s = status || {};
+  $('aListen').classList.toggle('on', listening);
+  $('oListen').textContent = listening ? '🔊' : '🔇'; $('oListen').classList.toggle('on', listening);
+  $('aFlash').classList.toggle('on', !!s.fl);
+  $('aSiren').classList.toggle('on', !!s.sir);
+  $('aSiren').lastChild.textContent = s.sir ? 'Parar' : 'Sirena';
 }
 
-function pad2(n) { return String(n).padStart(2, '0'); }
-function dayLabel(d) { return d.slice(6, 8) + '/' + d.slice(4, 6) + '/' + d.slice(0, 4); }
-
+// ---------- grabaciones ----------
+function dayLabel(d) {
+  const t = new Date(camNow()), y = new Date(camNow() - 86400000);
+  const k = x => x.getFullYear() + pad2(x.getMonth() + 1) + pad2(x.getDate());
+  if (d === k(t)) return 'Hoy';
+  if (d === k(y)) return 'Ayer';
+  const dd = new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8));
+  return dd.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+function selectDay(d) {
+  recDay = d;
+  [...$('days').children].forEach(b => b.classList && b.classList.toggle('sel', b.dataset && b.dataset.d === d));
+  $('recinfo') && ($('recinfo').textContent = '');
+  sendCmd({ c: 'day', d });
+}
 function renderList(j) {
-  if (j.nosd) { $('recinfo').textContent = 'La cámara no tiene tarjeta SD.'; return; }
+  if (j.nosd) { $('days').textContent = ''; $('days').appendChild(chip('La cámara no tiene tarjeta SD', 'warn')); return; }
   if (j.end) {
-    $('pb').textContent = j.empty ? '⏹ No hay grabación a partir de esa hora.' : '⏹ Fin de la grabación.';
+    if (mode === 'play') {
+      $('pbTxt').textContent = j.empty ? 'No hay grabación desde esa hora' : 'Fin de la grabación';
+      if (j.empty || !playFrames) placeholder(j.empty ? 'No hay grabación a partir de esa hora.' : 'La grabación terminó.');
+      toast(j.empty ? 'No hay grabación a partir de esa hora.' : '⏹ Fin de la grabación');
+    }
     return;
   }
   if (j.days) {
-    const sel = $('days'); sel.textContent = '';
-    if (!j.days.length) { $('recinfo').textContent = 'Todavía no hay grabaciones.'; sel.hidden = true; return; }
-    for (const d of j.days.slice().reverse()) { const o = document.createElement('option'); o.value = d; o.textContent = dayLabel(d); sel.appendChild(o); }
-    sel.hidden = false; $('recinfo').textContent = j.days.length + ' días grabados. Elige uno.';
-    sel.onchange(); return;
+    daysLoaded = true;
+    const box = $('days'); box.textContent = '';
+    if (!j.days.length) { box.appendChild(chip('Todavía no hay grabaciones')); return; }
+    for (const d of j.days.slice().reverse()) {
+      const b = document.createElement('button'); b.className = 'day'; b.dataset.d = d; b.textContent = dayLabel(d);
+      b.onclick = () => selectDay(d); box.appendChild(b);
+    }
+    selectDay(recDay && j.days.includes(recDay) ? recDay : j.days[j.days.length - 1]);
+    return;
   }
-  if (j.d) {
-    recDay = j.d;
-    $('recinfo').textContent = dayLabel(j.d) + ': ' + (j.ev.length ? j.ev.length + ' eventos (rojo). ' : 'sin eventos. ') + 'Toca un evento o una hora.';
-    const evs = $('evs'); evs.textContent = '';
-    for (const e of j.ev.slice().reverse().slice(0, 60)) {
-      const b = document.createElement('button'); b.className = 'ev';
-      b.textContent = '🚨 ' + e.slice(0, 2) + ':' + e.slice(2, 4) + ':' + e.slice(4, 6);
-      b.onclick = () => startPlay(recDay, e, 5);
-      evs.appendChild(b);
-    }
-    const hs = $('hours'); hs.textContent = '';
-    for (const h of j.h) {
-      const b = document.createElement('button'); b.textContent = pad2(h) + ':00';
-      b.onclick = () => startPlay(recDay, pad2(h) + '0000', 0);
-      hs.appendChild(b);
-    }
-    $('playrow').hidden = false;
+  if (j.d) { dayData = j; recDay = j.d; renderDay(); }
+}
+function renderDay() {
+  const j = dayData; if (!j) return;
+  $('dayView').hidden = false;
+  const tl = $('tl'); tl.textContent = '';
+  for (const h of j.h) { const e = document.createElement('div'); e.className = 'h'; e.style.left = (h / 24 * 100) + '%'; e.style.width = (100 / 24) + '%'; tl.appendChild(e); }
+  for (const e of j.ev) {
+    const s = (+e.slice(0, 2)) * 3600 + (+e.slice(2, 4)) * 60 + (+e.slice(4, 6));
+    const m = document.createElement('div'); m.className = 'ev'; m.style.left = (s / 864) + '%'; tl.appendChild(m);
+  }
+  const cur = document.createElement('div'); cur.className = 'cur'; cur.id = 'tlcur'; cur.hidden = true; tl.appendChild(cur);
+  const evs = $('evs'); evs.textContent = '';
+  $('evCard').hidden = !j.ev.length;
+  $('evTitle').textContent = j.ev.length + (j.ev.length === 1 ? ' evento' : ' eventos');
+  for (const e of j.ev.slice().reverse().slice(0, 100)) {
+    const li = document.createElement('li'), b = document.createElement('button');
+    const dot = document.createElement('span'); dot.className = 'dot';
+    const t = document.createElement('span'); t.className = 't'; t.textContent = e.slice(0, 2) + ':' + e.slice(2, 4) + ':' + e.slice(4, 6);
+    const l = document.createElement('span'); l.className = 'muted'; l.textContent = 'Alerta · ver desde 5 s antes';
+    b.append(dot, t, l); b.onclick = () => startPlay(recDay, e, 5);
+    li.appendChild(b); evs.appendChild(li);
   }
 }
-
+function secToHms(t) { return pad2(Math.floor(t / 3600)) + pad2(Math.floor(t / 60) % 60) + pad2(t % 60); }
 function startPlay(day, hhmmss, backSeconds) {
   let t = (+hhmmss.slice(0, 2)) * 3600 + (+hhmmss.slice(2, 4)) * 60 + (+hhmmss.slice(4, 6)) - backSeconds;
   if (t < 0) t = 0;
-  const tt = pad2(Math.floor(t / 3600)) + pad2(Math.floor(t / 60) % 60) + pad2(t % 60);
-  playSpeed = +$('speed').value || 1;
-  mode = 'play'; playLastTs = 0; playAudioTs = 0; nextT = 0;
-  $('pb').style.display = 'block';
-  $('pb').textContent = '▶ Cargando grabación…';
-  $('back').hidden = false;
-  sendCmd({ c: 'play', d: day, t: tt, a: playSpeed });
+  mode = 'play'; playLastTs = 0; playAudioTs = 0; nextT = 0; playFrames = 0; playStartedAt = Date.now();
+  $('bLive').hidden = true; $('bRec').hidden = false; $('bRec').textContent = 'GRABACIÓN'; $('oLive').hidden = false;
+  $('playCard').hidden = false; $('pbTxt').textContent = 'Cargando ' + pad2(Math.floor(t / 3600)) + ':' + pad2(Math.floor(t / 60) % 60) + '…';
+  placeholder('Cargando la grabación desde la tarjeta…');
+  sendCmd({ c: 'play', d: day, t: secToHms(t), a: playSpeed });
+  if (tab !== 'rec') showTab('rec');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
 function backToLive() {
-  sendCmd({ c: 'stop' });
+  if (mode === 'play') sendCmd({ c: 'stop' });
   mode = 'live'; lastFrameTs = 0; nextT = 0;
-  $('pb').style.display = 'none'; $('back').hidden = true;
+  $('bLive').hidden = false; $('bRec').hidden = true; $('oLive').hidden = true; $('playCard').hidden = true;
+  const c = $('tlcur'); if (c) c.hidden = true;
+  placeholder('Esperando vídeo en directo…');
+}
+function onPlayFrame(r) {
+  playFrames++;
+  showFrame(r.data);
+  const d = new Date(r.ts);
+  $('bRec').textContent = 'GRABACIÓN ' + fmtTime(r.ts) + (playSpeed > 1 ? ' · x' + playSpeed : '');
+  $('pbTxt').textContent = d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + fmtTime(r.ts);
+  const c = $('tlcur');
+  if (c) { c.hidden = false; c.style.left = ((d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) / 864) + '%'; }
 }
 
+// ---------- mensajes ----------
 async function onMsg(topic, m) {
   if (topic === topics.online) { online = dec.decode(m) === '1'; renderStatus(); return; }
   if (topic === topics.play) {
     if (mode !== 'play') return;
     let r;
     try { r = await openWith(keys.rec, 'rec:' + devId, m); }
-    catch (e) { $('msg').textContent = '⚠️ Grabación que no se puede descifrar (frase o ID distintos, o datos manipulados).'; return; }
+    catch (e) { toast('⚠️ Grabación que no se puede descifrar (frase o ID distintos, o datos manipulados).', 'bad'); return; }
     if (r.type === T_AUDIO) {
       if (r.ts > playAudioTs) { playAudioTs = r.ts; if (playSpeed === 1) playAudio(r.data); }
       return;
     }
     if (r.type !== T_FRAME || r.ts <= playLastTs) return;
     playLastTs = r.ts;
-    frameBlob = showImg($('cam'), r.data, 'cam'); $('ph').hidden = true;
-    $('pb').textContent = '▶ Grabación ' + fmt(r.ts) + ' · x' + playSpeed;
+    onPlayFrame(r);
     return;
   }
   let r;
   try { r = await openMsg(topic, m); }
-  catch (e) { $('msg').textContent = '⚠️ Mensaje que no se puede descifrar: frase secreta o ID incorrectos, o datos manipulados.'; return; }
-  if (!clockWarned) $('msg').textContent = '';
+  catch (e) { toast('⚠️ Mensaje que no se puede descifrar: frase secreta o ID incorrectos, o datos manipulados.', 'bad'); return; }
   learnClock(r.ts);
   if (topic === topics.list && r.type === T_LIST) {
     if (camNow() - r.ts > 60000) return;
@@ -412,30 +687,105 @@ async function onMsg(topic, m) {
   if (topic === topics.video && r.type === T_FRAME) {
     if (mode !== 'live') return;
     if (r.ts <= lastFrameTs) return;               // descarta repetidos o desordenados
-    if (camNow() - r.ts > 30000) { $('msg').textContent = '⚠️ Fotograma antiguo descartado (posible repetición o reloj desajustado).'; return; }
+    if (camNow() - r.ts > 30000) return;           // fotograma antiguo (repetición): se ignora
     lastFrameTs = r.ts; frames++;
-    frameBlob = showImg($('cam'), r.data, 'cam'); $('ph').hidden = true;
+    showFrame(r.data);
   } else if (topic === topics.status && r.type === T_STATUS) {
     if (r.ts <= lastStatusTs) return;              // no acepta estados más antiguos (repetición)
+    const prev = status;
     lastStatusTs = r.ts; status = JSON.parse(dec.decode(r.data)); renderStatus();
+    if (prev && prev.sir && !status.sir) toast('🔕 La sirena se ha parado');
   } else if (topic === topics.alert && r.type === T_ALERT) {
     if (r.ts <= lastAlertTs) return;
+    const isNew = lastAlertTs && camNow() - r.ts < 120000;
     lastAlertTs = r.ts;
     showImg($('alert'), r.data, 'alert'); $('alertt').textContent = '🚨 ' + fmt(r.ts);
+    $('alertCard').hidden = false;
+    if (isNew) toast('🚨 Movimiento detectado ' + fmtTime(r.ts), 'bad');
   }
 }
-
 function onState(ok, err) {
-  $('dot').style.background = ok ? 'var(--ok)' : 'var(--bad)';
-  $('conn').textContent = ok ? 'Conectado · cifrado E2E' : (err || 'Reconectando…');
-  if (ok) sendCmd({ c: 'watch' });
+  if (!ok) { placeholder(err || 'Reconectando…'); if (err) toast(err, 'bad'); }
+  else { placeholder(mode === 'live' ? 'Esperando vídeo en directo…' : 'Cargando la grabación…'); sendCmd({ c: 'watch' }); if (tab === 'rec' && !daysLoaded) sendCmd({ c: 'days' }); }
+  renderStatus();
 }
 
+// ---------- controles ----------
 function servo(a) {
   a = Math.max(0, Math.min(180, Math.round(a)));
   $('ang').value = a; $('angv').textContent = a + '°';
   sendCmd({ c: 'servo', a });
 }
+function showTab(t) {
+  tab = t;
+  for (const x of ['live', 'rec', 'set']) $('tab-' + x).hidden = x !== t;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('sel', b.dataset.tab === t));
+  if (t === 'rec' && !daysLoaded) sendCmd({ c: 'days' });
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+$('armBtn').onclick = () => {
+  const armed = !!(status && status.armed);
+  if (armed && !confirm('¿Desactivar la vigilancia? No llegarán alertas hasta que la vuelvas a activar.')) return;
+  sendCmd({ c: 'arm', a: armed ? 0 : 1 });
+  toast(armed ? '🔓 Desactivando vigilancia…' : '🛡️ Activando vigilancia…');
+};
+$('aListen').onclick = toggleListen; $('oListen').onclick = toggleListen;
+$('aSnap').onclick = snapshot; $('oSnap').onclick = snapshot;
+$('aFlash').onclick = () => { const on = !(status && status.fl); sendCmd({ c: 'flash', a: on ? flashLast : 0 }); };
+$('aSiren').onclick = () => {
+  const on = !(status && status.sir);
+  if (on && !confirm('¿Hacer sonar la sirena de la cámara?')) return;
+  sendCmd({ c: 'siren', a: on ? 1 : 0 });
+};
+$('panL').onclick = () => servo(+$('ang').value + 20);
+$('panR').onclick = () => servo(+$('ang').value - 20);
+$('center').onclick = () => servo(90);
+$('oFs').onclick = () => {
+  const p = $('player'), on = !p.classList.contains('fs');
+  p.classList.toggle('fs', on);
+  try { if (on && p.requestFullscreen) p.requestFullscreen().catch(() => {}); else if (!on && document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+};
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) $('player').classList.remove('fs'); });
+$('oLive').onclick = backToLive; $('backLive').onclick = backToLive;
+
+// Deslizadores: muestran el valor al moverlos y envían la orden al soltarlos
+function slider(id, out, suf, send) {
+  $(id).oninput = () => { dragging[id] = true; $(out).textContent = $(id).value + suf; };
+  $(id).onchange = () => { dragging[id] = false; send(+$(id).value); };
+}
+slider('ang', 'angv', '°', v => servo(v));
+slider('nlvl', 'nlv', '', v => sendCmd({ c: 'nlvl', a: v }));
+slider('svol', 'svv', ' %', v => sendCmd({ c: 'svol', a: v }));
+slider('bvol', 'bvv', ' %', v => sendCmd({ c: 'bvol', a: v }));
+slider('flash', 'flv', ' %', v => { if (v) flashLast = v; sendCmd({ c: 'flash', a: v }); });
+// Interruptores
+for (const [id, c] of [['conf', 'conf'], ['noise', 'noise'], ['mic', 'mic'], ['sir', 'sir'], ['beep', 'beep']]) {
+  $(id).onclick = () => { const on = !$(id).classList.contains('on'); $(id).classList.toggle('on', on); sendCmd({ c, a: on ? 1 : 0 }); };
+}
+$('sirs').onchange = () => sendCmd({ c: 'sirs', a: +$('sirs').value });
+
+// Grabaciones
+document.querySelectorAll('#speedSeg button').forEach(b => b.onclick = () => {
+  playSpeed = +b.dataset.s;
+  document.querySelectorAll('#speedSeg button').forEach(x => x.classList.toggle('sel', x === b));
+  if (mode === 'play' && playLastTs && recDay) {     // sigue desde donde iba con la nueva velocidad
+    const d = new Date(playLastTs);
+    startPlay(recDay, pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()), 0);
+  }
+});
+$('tl').onclick = e => {
+  if (!recDay) return;
+  const r = $('tl').getBoundingClientRect();
+  const t = Math.max(0, Math.min(86399, Math.round((e.clientX - r.left) / r.width * 86400)));
+  startPlay(recDay, secToHms(t), 0);
+};
+$('pgo').onclick = () => { const v = ($('ptime').value || '00:00:00').replace(/:/g, ''); if (recDay) startPlay(recDay, (v + '00').slice(0, 6), 0); };
+$('alertPlay').onclick = () => {
+  if (!lastAlertTs) return;
+  const d = new Date(lastAlertTs);
+  startPlay(d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()), pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()), 5);
+};
 
 // ---------- "Recordar en este dispositivo": IndexedDB con claves NO extraíbles ----------
 function idbOpen() {
@@ -472,6 +822,7 @@ function startSession(host, user, pass, dev) {
   topics = { video: b + '/v', status: b + '/s', alert: b + '/a', cmd: b + '/c', online: b + '/o', list: b + '/l', play: b + '/p', audio: b + '/u' };
   $('login').hidden = true; $('app').hidden = false;
   $('logout').textContent = remembered ? 'Olvidar este dispositivo' : 'Cerrar sesión';
+  $('devInfo').textContent = 'Cámara ' + dev + (remembered ? ' · recordada en este dispositivo' : '');
   mq = new Mqtt(host, user, pass, [topics.video, topics.status, topics.alert, topics.online, topics.list, topics.play, topics.audio], onMsg, onState);
 }
 
@@ -481,10 +832,10 @@ $('go').onclick = async () => {
   if (!/^[a-z]+:\/\//i.test(host)) host = 'wss://' + host;
   const user = $('user').value.trim(), pass = $('mpass').value, dev = $('dev').value.trim(), phrase = $('phrase').value;
   if (!/^wss:\/\/[^\s]+$/i.test(host)) { $('lerr').textContent = 'El broker debe empezar por wss:// (conexión cifrada).'; return; }
-  if (!user) { $('lerr').textContent = 'Falta el token del broker.'; return; }
+  if (!user) { $('lerr').textContent = 'Falta el token del visor.'; return; }
   if (!/^[0-9A-Za-z]{16,}$/.test(dev)) { $('lerr').textContent = 'El ID debe tener 16+ letras o números.'; return; }
   if (phrase.length < 20) { $('lerr').textContent = 'La frase secreta debe tener 20+ caracteres.'; return; }
-  $('go').disabled = true; $('lerr').textContent = 'Derivando claves…';
+  $('go').disabled = true; $('lerr').textContent = 'Derivando claves… (unos segundos)';
   try { keys = await derive(phrase, dev); } catch (e) { $('lerr').textContent = 'Error de cifrado: ' + e.message; $('go').disabled = false; return; }
   $('phrase').value = ''; $('mpass').value = ''; $('user').value = '';
   try {
@@ -499,51 +850,6 @@ $('go').onclick = async () => {
   startSession(host, user, pass, dev);
 };
 
-document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => servo(+$('ang').value + +b.dataset.d));
-$('center').onclick = () => servo(90);
-let flDragging = false;
-$('flash').oninput = () => { flDragging = true; $('flv').textContent = $('flash').value + ' %'; };
-$('flash').onchange = () => { flDragging = false; sendCmd({ c: 'flash', a: +$('flash').value }); };
-$('floff').onclick = () => { $('flash').value = 0; $('flv').textContent = '0 %'; sendCmd({ c: 'flash', a: 0 }); };
-$('conf').onchange = () => sendCmd({ c: 'conf', a: $('conf').checked ? 1 : 0 });
-$('recload').onclick = () => { $('recinfo').textContent = 'Consultando la tarjeta…'; sendCmd({ c: 'days' }); };
-$('days').onchange = () => { if ($('days').value) sendCmd({ c: 'day', d: $('days').value }); };
-$('pgo').onclick = () => { const v = ($('ptime').value || '00:00:00').replace(/:/g, ''); if (recDay) startPlay(recDay, (v + '00').slice(0, 6), 0); };
-$('back').onclick = backToLive;
-$('listen').onclick = () => {
-  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-  actx.resume();
-  listening = !listening; nextT = 0;
-  $('listen').textContent = listening ? '🔇 Dejar de escuchar' : '🔊 Escuchar';
-};
-let nlDragging = false;
-$('mic').onchange = () => sendCmd({ c: 'mic', a: $('mic').checked ? 1 : 0 });
-$('noise').onchange = () => sendCmd({ c: 'noise', a: $('noise').checked ? 1 : 0 });
-$('nlvl').oninput = () => { nlDragging = true; $('nlv').textContent = $('nlvl').value; };
-$('nlvl').onchange = () => { nlDragging = false; sendCmd({ c: 'nlvl', a: +$('nlvl').value }); };
-let volDragging = '';
-for (const [id, out] of [['svol', 'svv'], ['bvol', 'bvv']]) {
-  $(id).oninput = () => { volDragging = id; $(out).textContent = $(id).value + ' %'; };
-  $(id).onchange = () => { volDragging = ''; sendCmd({ c: id, a: +$(id).value }); };
-}
-$('siren').onclick = () => {
-  const on = !(status && status.sir);
-  if (on && !confirm('¿Activar la sirena de la cámara?')) return;
-  sendCmd({ c: 'siren', a: on ? 1 : 0 });
-};
-$('sir').onchange = () => sendCmd({ c: 'sir', a: $('sir').checked ? 1 : 0 });
-$('sirs').onchange = () => sendCmd({ c: 'sirs', a: +$('sirs').value });
-$('beep').onchange = () => sendCmd({ c: 'beep', a: $('beep').checked ? 1 : 0 });
-$('ang').oninput = () => { dragging = true; $('angv').textContent = $('ang').value + '°'; };
-$('ang').onchange = () => { dragging = false; servo(+$('ang').value); };
-$('armed').onchange = () => sendCmd({ c: 'arm', a: $('armed').checked ? 1 : 0 });
-$('save').onclick = () => {
-  if (!frameBlob) return;
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(frameBlob);
-  a.download = 'camara-' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg';
-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-};
 $('logout').onclick = async () => {
   if (remembered) {
     if (!confirm('Se borrarán de este dispositivo las claves y el token. ¿Continuar?')) return;
@@ -554,7 +860,6 @@ $('logout').onclick = async () => {
 
 // Latido: la cámara solo emite vídeo mientras el visor está visible
 setInterval(() => { if (document.visibilityState === 'visible') sendCmd({ c: 'watch' }); }, 5000);
-// Bloqueo automático: tras 10 min en segundo plano se borran las claves de memoria
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
   // Tras 10 min en segundo plano: sin "recordar" se borran las claves de memoria;
@@ -565,8 +870,18 @@ document.addEventListener('visibilitychange', () => {
 setInterval(() => { if (topics) renderStatus(); }, 5000);
 setInterval(() => {
   if (!topics) return;
-  const lag = lastFrameTs ? Math.max(0, (camNow() - lastFrameTs) / 1000) : 0;
-  $('fps').textContent = frames + ' fps' + (lastFrameTs && lag > 5 ? ' · sin vídeo hace ' + Math.round(lag) + ' s' : '');
+  if (mode === 'live') {
+    const lag = lastFrameTs ? (camNow() - lastFrameTs) / 1000 : 0;
+    $('fps').textContent = lastFrameTs ? (lag > 5 ? 'sin vídeo hace ' + Math.round(lag) + ' s' : frames + ' fps') : '';
+    if (lastFrameTs && lag > 8) placeholder('Sin vídeo desde hace ' + Math.round(lag) + ' s. Comprobando la conexión…');
+  } else {
+    $('fps').textContent = '';
+    if (!playFrames && Date.now() - playStartedAt > 15000) {
+      $('pbTxt').textContent = 'La cámara no envía la grabación';
+      placeholder('La cámara no está enviando la grabación. Prueba de nuevo o con x1; con WiFi débil puede tardar.');
+      playStartedAt = Date.now() + 1e9;
+    }
+  }
   frames = 0;
 }, 1000);
 
