@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-R74y9GX0EfMk8PMvb87Q77QWzNba2dVEzPfaYCZGbUA='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-88Kp2S6QMYpVFgkdQ4Ee5UB5dr3nZneK7B7kZZKbkkQ='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0b0d12">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -310,6 +310,8 @@ let mode = 'live', playLastTs = 0, playSpeed = 1, recDay = '', playStartedAt = 0
 let lastFrameTs = 0, lastAlertTs = 0, frames = 0, lastCmdTs = 0, tab = 'live', daysLoaded = false, dayData = null;
 let status = null, lastStatusTs = 0, online = null, frameBlob = null, hiddenAt = 0, flashLast = 100;
 const urls = {}, dragging = {};
+// Identificador aleatorio de esta pestaña: la cámara cuenta cuántos visores hay para repartir el caudal
+const viewerId = Array.from(crypto.getRandomValues(new Uint8Array(4)), b => b.toString(16).padStart(2, '0')).join('');
 
 // ---------- avisos ----------
 let toastT = 0;
@@ -706,7 +708,7 @@ async function onMsg(topic, m) {
 }
 function onState(ok, err) {
   if (!ok) { placeholder(err || 'Reconectando…'); if (err) toast(err, 'bad'); }
-  else { placeholder(mode === 'live' ? 'Esperando vídeo en directo…' : 'Cargando la grabación…'); sendCmd({ c: 'watch' }); if (tab === 'rec' && !daysLoaded) sendCmd({ c: 'days' }); }
+  else { placeholder(mode === 'live' ? 'Esperando vídeo en directo…' : 'Cargando la grabación…'); sendCmd({ c: 'watch', v: viewerId }); if (tab === 'rec' && !daysLoaded) sendCmd({ c: 'days' }); }
   renderStatus();
 }
 
@@ -859,13 +861,13 @@ $('logout').onclick = async () => {
 };
 
 // Latido: la cámara solo emite vídeo mientras el visor está visible
-setInterval(() => { if (document.visibilityState === 'visible') sendCmd({ c: 'watch' }); }, 5000);
+setInterval(() => { if (document.visibilityState === 'visible') sendCmd({ c: 'watch', v: viewerId }); }, 5000);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
   // Tras 10 min en segundo plano: sin "recordar" se borran las claves de memoria;
   // con "recordar" se reconecta desde cero (las claves siguen en el almacén seguro)
   if (keys && hiddenAt && Date.now() - hiddenAt > 600000) { if (mq) mq.close(); keys = null; location.reload(); return; }
-  sendCmd({ c: 'watch' });
+  sendCmd({ c: 'watch', v: viewerId });
 });
 setInterval(() => { if (topics) renderStatus(); }, 5000);
 setInterval(() => {
