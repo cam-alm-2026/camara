@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Kd1aTjklJTpTMoS4HDOWfqG2xWZIocPq01cVUU6g94E='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Cámara</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--txt:#e8eaed;--mut:#9aa0a6;--acc:#3b82f6;--ok:#22c55e;--bad:#ef4444}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);padding:env(safe-area-inset-top) 12px 24px}
+h1{font-size:20px;margin:20px 0 12px}h2{font-size:15px;color:var(--mut);margin:22px 0 8px}
+label{display:block;margin:10px 0;font-size:14px;color:var(--mut)}
+input:not([type=checkbox]):not([type=range]){display:block;width:100%;margin-top:4px;padding:12px;border-radius:10px;border:1px solid #2a2f3a;background:var(--card);color:var(--txt);font-size:16px}
+.chk{display:flex;gap:8px;align-items:center;color:var(--txt)}
+button{font-size:16px;padding:12px 16px;border:0;border-radius:10px;background:var(--acc);color:#fff}
+button:disabled{opacity:.5}button.sec{background:#2a2f3a}
+#go{width:100%;margin-top:12px}
+.err{color:var(--bad);font-size:14px;min-height:20px}
+.bar{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--mut);margin:10px 0}
+#dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+#fps{margin-left:auto}
+.video{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:4/3}
+.video img{width:100%;height:100%;object-fit:contain;display:block}
+#ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut)}
+.row{display:flex;gap:8px;align-items:center;margin:12px 0}
+input[type=range]{flex:1}
+#st{font-size:13px;color:var(--mut);line-height:1.5}
+#alert{width:100%;border-radius:12px;background:#000;min-height:40px}
+#alertt{font-size:13px;color:var(--mut);margin-top:4px}
+#msg{font-size:13px;color:var(--bad);min-height:18px}
+.note{font-size:12px;color:var(--mut);margin:-4px 0 8px 26px}
+</style>
+</head>
+<body>
+
+<section id="login">
+  <h1>🔒 Cámara cifrada</h1>
+  <label>Broker (WebSocket seguro)<input id="host" value="wss://mqtt.flespi.io" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+  <label>Token flespi del visor<input id="user" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+  <label>Contraseña MQTT (en flespi déjala vacía)<input id="mpass" type="password" autocomplete="off"></label>
+  <label>ID de la cámara<input id="dev" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+  <label>Frase secreta<input id="phrase" type="password" autocomplete="off"></label>
+  <label class="chk"><input type="checkbox" id="remember"> Recordar broker e ID (nunca token ni claves)</label>
+  <label class="chk"><input type="checkbox" id="persist"> Recordar en este dispositivo (abrir sin escribir nada)</label>
+  <p class="note">Solo en tu móvil personal y con bloqueo de pantalla. Las claves se guardan de forma que ninguna página ni app pueda extraerlas, pero cualquiera con tu móvil desbloqueado podrá ver la cámara.</p>
+  <button id="go">Conectar</button>
+  <p class="err" id="lerr"></p>
+</section>
+
+<section id="app" hidden>
+  <div class="bar"><span id="dot"></span><span id="conn">Conectando…</span><span id="fps"></span></div>
+  <div class="video"><img id="cam" alt=""><div id="ph">Esperando vídeo…</div></div>
+  <div id="msg"></div>
+  <div class="row">
+    <button data-d="20">◀</button>
+    <input type="range" id="ang" min="0" max="180" value="90">
+    <button data-d="-20">▶</button>
+  </div>
+  <div class="row">
+    <span id="angv">90°</span>
+    <button class="sec" id="center">Centro</button>
+    <button class="sec" id="save">Guardar foto</button>
+  </div>
+  <div class="row"><label class="chk"><input type="checkbox" id="armed"> Alarma armada</label></div>
+  <div id="st"></div>
+  <h2>Última alerta</h2>
+  <img id="alert" alt="">
+  <div id="alertt">Sin alertas</div>
+  <div class="row"><button class="sec" id="logout">Cerrar sesión</button></div>
+</section>
+
+<script>
+'use strict';
+// Evita que la página se cargue dentro de otra (clickjacking)
+if (window.top !== window.self) { document.body.textContent = ''; throw new Error('framed'); }
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder(), dec = new TextDecoder();
+const T_FRAME = 1, T_STATUS = 2, T_ALERT = 3, T_CMD = 0x10;
+let keys = null, mq = null, topics = null, remembered = false;
+let lastFrameTs = 0, lastAlertTs = 0, frames = 0, lastCmdTs = 0;
+let status = null, lastStatusTs = 0, online = null, dragging = false, frameBlob = null, hiddenAt = 0;
+const urls = {};
+
+// ---------- utilidades binarias ----------
+function cat(...a) { let n = 0; for (const x of a) n += x.length; const o = new Uint8Array(n); let p = 0; for (const x of a) { o.set(x, p); p += x.length; } return o; }
+function mstr(s) { const b = enc.encode(s); return cat(new Uint8Array([b.length >> 8, b.length & 255]), b); }
+function rlen(n) { const o = []; do { let d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; o.push(d); } while (n > 0); return new Uint8Array(o); }
+function pkt(h, body) { return cat(new Uint8Array([h]), rlen(body.length), body); }
+function fmt(ts) { return new Date(ts).toLocaleString('es-ES'); }
+
+// ---------- cliente MQTT 3.1.1 mínimo sobre WebSocket seguro (sin dependencias) ----------
+class Mqtt {
+  constructor(url, user, pass, subs, onMsg, onState) {
+    Object.assign(this, { url, user, pass, subs, onMsg, onState });
+    this.stop = false; this.err = ''; this.open();
+  }
+  open() {
+    this.buf = new Uint8Array(0); this.ok = false;
+    this.ws = new WebSocket(this.url, 'mqtt');
+    this.ws.binaryType = 'arraybuffer';
+    this.ws.onopen = () => {
+      const rnd = Array.from(crypto.getRandomValues(new Uint8Array(6)), b => b.toString(16).padStart(2, '0')).join('');
+      const flags = this.pass ? 0xC2 : 0x82;
+      this.ws.send(pkt(0x10, cat(mstr('MQTT'), new Uint8Array([4, flags, 0, 60]), mstr('visor-' + rnd), mstr(this.user), this.pass ? mstr(this.pass) : new Uint8Array(0))));
+    };
+    this.ws.onmessage = e => this.feed(new Uint8Array(e.data));
+    this.ws.onclose = () => {
+      this.ok = false; clearInterval(this.ping); this.onState(false, this.err);
+      if (!this.stop) setTimeout(() => this.open(), 3000);
+    };
+    this.ws.onerror = () => {};
+  }
+  close() { this.stop = true; try { this.ws.send(new Uint8Array([0xE0, 0])); } catch (e) {} this.ws.close(); }
+  send(b) { if (this.ws.readyState === 1) this.ws.send(b); }
+  publish(topic, payload) { this.send(pkt(0x30, cat(mstr(topic), payload))); }
+  feed(chunk) {
+    this.buf = this.buf.length ? cat(this.buf, chunk) : chunk;
+    for (;;) {
+      const b = this.buf; if (b.length < 2) return;
+      let len = 0, mul = 1, i = 1, c;
+      do { if (i >= b.length) return; c = b[i++]; len += (c & 127) * mul; mul *= 128; } while (c & 128);
+      if (b.length < i + len) return;
+      const h = b[0], body = b.slice(i, i + len);
+      this.buf = b.slice(i + len);
+      this.handle(h, body);
+    }
+  }
+  handle(h, body) {
+    const t = h >> 4;
+    if (t === 2) {                                   // CONNACK
+      if (body[1] !== 0) { this.stop = true; this.err = 'Token o contraseña MQTT incorrectos'; this.ws.close(); return; }
+      this.ok = true; this.err = '';
+      let s = new Uint8Array(0);
+      for (const x of this.subs) s = cat(s, mstr(x), new Uint8Array([0]));
+      this.send(pkt(0x82, cat(new Uint8Array([0, 1]), s)));
+      this.ping = setInterval(() => this.send(new Uint8Array([0xC0, 0])), 30000);
+      this.onState(true);
+    } else if (t === 3) {                            // PUBLISH
+      const q = (h >> 1) & 3, tl = (body[0] << 8) | body[1];
+      const topic = dec.decode(body.subarray(2, 2 + tl));
+      let p = 2 + tl;
+      if (q > 0) { this.send(new Uint8Array([0x40, 2, body[p], body[p + 1]])); p += 2; }
+      this.onMsg(topic, body.subarray(p));
+    }
+  }
+}
+
+// ---------- criptografía E2E (WebCrypto) ----------
+async function derive(phrase, dev) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(phrase.normalize('NFC')), 'PBKDF2', false, ['deriveBits']);
+  const master = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode('espcam-v1:' + dev), iterations: 600000, hash: 'SHA-256' }, base, 256);
+  const hk = await crypto.subtle.importKey('raw', master, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const kv = await crypto.subtle.sign('HMAC', hk, enc.encode('video'));
+  const kc = await crypto.subtle.sign('HMAC', hk, enc.encode('cmd'));
+  return {
+    video: await crypto.subtle.importKey('raw', kv, 'AES-GCM', false, ['decrypt']),
+    cmd: await crypto.subtle.importKey('raw', kc, 'AES-GCM', false, ['encrypt'])
+  };
+}
+
+async function openMsg(topic, m) {
+  if (m.length < 38 || m[0] !== 1) throw new Error('formato');
+  const pt = new Uint8Array(await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: m.slice(1, 13), additionalData: enc.encode(topic), tagLength: 128 }, keys.video, m.slice(13)));
+  return { ts: Number(new DataView(pt.buffer).getBigUint64(0)), type: pt[8], data: pt.slice(9) };
+}
+
+async function sendCmd(obj) {
+  if (!mq || !mq.ok) return;
+  const ts = Math.max(Date.now(), lastCmdTs + 1); lastCmdTs = ts;
+  const j = enc.encode(JSON.stringify(obj));
+  const pt = new Uint8Array(9 + j.length);
+  new DataView(pt.buffer).setBigUint64(0, BigInt(ts)); pt[8] = T_CMD; pt.set(j, 9);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: enc.encode(topics.cmd), tagLength: 128 }, keys.cmd, pt));
+  mq.publish(topics.cmd, cat(new Uint8Array([1]), iv, ct));
+}
+
+// ---------- interfaz ----------
+function showImg(img, data, k) {
+  const blob = new Blob([data], { type: 'image/jpeg' });
+  const url = URL.createObjectURL(blob), old = urls[k];
+  img.src = url; urls[k] = url;
+  if (old) setTimeout(() => URL.revokeObjectURL(old), 1000);
+  return blob;
+}
+
+function renderStatus() {
+  // "En línea" se deduce del estado CIFRADO y reciente; el topic /o no está autenticado y solo es una pista
+  const age = lastStatusTs ? Math.round((Date.now() - lastStatusTs) / 1000) : null;
+  const fresh = age !== null && age < 75;
+  const p = [fresh ? '🟢 Cámara en línea' : (online === false ? '🔴 Cámara desconectada' : '🟠 Sin datos recientes de la cámara')];
+  if (age !== null) p.push('estado de hace ' + age + ' s');
+  if (status) {
+    p.push(status.armed ? 'Alarma armada' : 'Alarma desarmada');
+    p.push('WiFi ' + status.rssi + ' dBm');
+    p.push(status.motion ? 'Último movimiento: ' + fmt(status.motion) : 'Sin movimiento registrado');
+    $('armed').checked = !!status.armed;
+    if (!dragging) { $('ang').value = status.angle; $('angv').textContent = status.angle + '°'; }
+  }
+  $('st').textContent = p.join(' · ');
+}
+
+async function onMsg(topic, m) {
+  if (topic === topics.online) { online = dec.decode(m) === '1'; renderStatus(); return; }
+  let r;
+  try { r = await openMsg(topic, m); }
+  catch (e) { $('msg').textContent = '⚠️ Mensaje que no se puede descifrar: frase secreta o ID incorrectos, o datos manipulados.'; return; }
+  $('msg').textContent = '';
+  if (topic === topics.video && r.type === T_FRAME) {
+    if (r.ts <= lastFrameTs) return;               // descarta repetidos o desordenados
+    if (Date.now() - r.ts > 30000) { $('msg').textContent = '⚠️ Fotograma antiguo descartado (posible repetición o reloj desajustado).'; return; }
+    lastFrameTs = r.ts; frames++;
+    frameBlob = showImg($('cam'), r.data, 'cam'); $('ph').hidden = true;
+  } else if (topic === topics.status && r.type === T_STATUS) {
+    if (r.ts <= lastStatusTs) return;              // no acepta estados más antiguos (repetición)
+    lastStatusTs = r.ts; status = JSON.parse(dec.decode(r.data)); renderStatus();
+  } else if (topic === topics.alert && r.type === T_ALERT) {
+    if (r.ts <= lastAlertTs) return;
+    lastAlertTs = r.ts;
+    showImg($('alert'), r.data, 'alert'); $('alertt').textContent = '🚨 ' + fmt(r.ts);
+  }
+}
+
+function onState(ok, err) {
+  $('dot').style.background = ok ? 'var(--ok)' : 'var(--bad)';
+  $('conn').textContent = ok ? 'Conectado · cifrado E2E' : (err || 'Reconectando…');
+  if (ok) sendCmd({ c: 'watch' });
+}
+
+function servo(a) {
+  a = Math.max(0, Math.min(180, Math.round(a)));
+  $('ang').value = a; $('angv').textContent = a + '°';
+  sendCmd({ c: 'servo', a });
+}
+
+// ---------- "Recordar en este dispositivo": IndexedDB con claves NO extraíbles ----------
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('espcam', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function idbDo(mode, fn) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', mode), req = fn(tx.objectStore('kv'));
+    tx.oncomplete = () => { db.close(); res(req && req.result); };
+    tx.onerror = tx.onabort = () => { db.close(); rej(tx.error); };
+  });
+}
+const idbGet = k => idbDo('readonly', st => st.get(k));
+const idbPut = (k, v) => idbDo('readwrite', st => st.put(v, k));
+const idbClear = () => idbDo('readwrite', st => st.clear());
+
+async function persistDevice(host, user, dev) {
+  // El token se cifra con una clave AES propia, también no extraíble
+  const wrap = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrap, enc.encode(user)));
+  await idbPut('cfg', { v: 1, host, dev, video: keys.video, cmd: keys.cmd, wrap, iv, ct });
+  try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) {}
+}
+
+function startSession(host, user, pass, dev) {
+  const b = 'espcam/' + dev;
+  topics = { video: b + '/v', status: b + '/s', alert: b + '/a', cmd: b + '/c', online: b + '/o' };
+  $('login').hidden = true; $('app').hidden = false;
+  $('logout').textContent = remembered ? 'Olvidar este dispositivo' : 'Cerrar sesión';
+  mq = new Mqtt(host, user, pass, [topics.video, topics.status, topics.alert, topics.online], onMsg, onState);
+}
+
+$('go').onclick = async () => {
+  if (!window.isSecureContext || !crypto.subtle) { $('lerr').textContent = 'Abre el visor por HTTPS.'; return; }
+  let host = $('host').value.trim();
+  if (!/^[a-z]+:\/\//i.test(host)) host = 'wss://' + host;
+  const user = $('user').value.trim(), pass = $('mpass').value, dev = $('dev').value.trim(), phrase = $('phrase').value;
+  if (!/^wss:\/\/[^\s]+$/i.test(host)) { $('lerr').textContent = 'El broker debe empezar por wss:// (conexión cifrada).'; return; }
+  if (!user) { $('lerr').textContent = 'Falta el token del broker.'; return; }
+  if (!/^[0-9A-Za-z]{16,}$/.test(dev)) { $('lerr').textContent = 'El ID debe tener 16+ letras o números.'; return; }
+  if (phrase.length < 20) { $('lerr').textContent = 'La frase secreta debe tener 20+ caracteres.'; return; }
+  $('go').disabled = true; $('lerr').textContent = 'Derivando claves…';
+  try { keys = await derive(phrase, dev); } catch (e) { $('lerr').textContent = 'Error de cifrado: ' + e.message; $('go').disabled = false; return; }
+  $('phrase').value = ''; $('mpass').value = ''; $('user').value = '';
+  try {
+    if ($('remember').checked) localStorage.setItem('cam', JSON.stringify({ host, dev }));
+    else localStorage.removeItem('cam');
+  } catch (e) {}
+  if ($('persist').checked) {
+    if (pass) { $('lerr').textContent = 'Para recordar el dispositivo, usa un token sin contraseña (flespi).'; $('go').disabled = false; return; }
+    try { await persistDevice(host, user, dev); remembered = true; }
+    catch (e) { $('lerr').textContent = 'Este navegador no permite recordar de forma segura. Se conectará sin recordar.'; }
+  }
+  startSession(host, user, pass, dev);
+};
+
+document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => servo(+$('ang').value + +b.dataset.d));
+$('center').onclick = () => servo(90);
+$('ang').oninput = () => { dragging = true; $('angv').textContent = $('ang').value + '°'; };
+$('ang').onchange = () => { dragging = false; servo(+$('ang').value); };
+$('armed').onchange = () => sendCmd({ c: 'arm', a: $('armed').checked ? 1 : 0 });
+$('save').onclick = () => {
+  if (!frameBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(frameBlob);
+  a.download = 'camara-' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg';
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+$('logout').onclick = async () => {
+  if (remembered) {
+    if (!confirm('Se borrarán de este dispositivo las claves y el token. ¿Continuar?')) return;
+    try { await idbClear(); } catch (e) {}
+  }
+  if (mq) mq.close(); keys = null; location.reload();
+};
+
+// Latido: la cámara solo emite vídeo mientras el visor está visible
+setInterval(() => { if (document.visibilityState === 'visible') sendCmd({ c: 'watch' }); }, 5000);
+// Bloqueo automático: tras 10 min en segundo plano se borran las claves de memoria
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+  // Tras 10 min en segundo plano: sin "recordar" se borran las claves de memoria;
+  // con "recordar" se reconecta desde cero (las claves siguen en el almacén seguro)
+  if (keys && hiddenAt && Date.now() - hiddenAt > 600000) { if (mq) mq.close(); keys = null; location.reload(); return; }
+  sendCmd({ c: 'watch' });
+});
+setInterval(() => { if (topics) renderStatus(); }, 5000);
+setInterval(() => {
+  if (!topics) return;
+  const lag = lastFrameTs ? Math.max(0, (Date.now() - lastFrameTs) / 1000) : 0;
+  $('fps').textContent = frames + ' fps' + (lastFrameTs && lag > 5 ? ' · sin vídeo hace ' + Math.round(lag) + ' s' : '');
+  frames = 0;
+}, 1000);
+
+try {
+  const s = JSON.parse(localStorage.getItem('cam') || 'null');
+  if (s) { if (s.host) $('host').value = s.host; $('dev').value = s.dev || ''; $('remember').checked = true; }
+} catch (e) {}
+
+// Arranque automático si este dispositivo está recordado
+(async () => {
+  try {
+    if (!window.isSecureContext || !crypto.subtle || !window.indexedDB) return;
+    const c = await idbGet('cfg');
+    if (!c || c.v !== 1) return;
+    const user = dec.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: c.iv }, c.wrap, c.ct));
+    keys = { video: c.video, cmd: c.cmd };
+    remembered = true;
+    startSession(c.host, user, '', c.dev);
+  } catch (e) {
+    $('lerr').textContent = 'No se pudo abrir la configuración guardada. Vuelve a introducir los datos.';
+  }
+})();
+</script>
+</body>
+</html>
