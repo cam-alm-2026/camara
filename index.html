@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Kd1aTjklJTpTMoS4HDOWfqG2xWZIocPq01cVUU6g94E='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Q7xE11Bt5L7eTrDRYiBlnBuGGOylXR7h/0RRNlfxcDI='; style-src 'unsafe-inline'; img-src blob:; connect-src wss://mqtt.flespi.io wss://mqtt.flespi.io:443; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0f1115">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -31,6 +31,12 @@ input[type=range]{flex:1}
 #st{font-size:13px;color:var(--mut);line-height:1.5}
 #alert{width:100%;border-radius:12px;background:#000;min-height:40px}
 #alertt{font-size:13px;color:var(--mut);margin-top:4px}
+#pb{display:none;font-size:14px;color:#fbbf24;margin:6px 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chips button{padding:8px 10px;font-size:14px;background:#2a2f3a}
+.chips button.ev{background:#7f1d1d}
+select,input[type=time]{font-size:16px;padding:10px;border-radius:10px;border:1px solid #2a2f3a;background:var(--card);color:var(--txt)}
+.small{font-size:13px;color:var(--mut)}
 #msg{font-size:13px;color:var(--bad);min-height:18px}
 .note{font-size:12px;color:var(--mut);margin:-4px 0 8px 26px}
 </style>
@@ -54,6 +60,8 @@ input[type=range]{flex:1}
 <section id="app" hidden>
   <div class="bar"><span id="dot"></span><span id="conn">Conectando…</span><span id="fps"></span></div>
   <div class="video"><img id="cam" alt=""><div id="ph">Esperando vídeo…</div></div>
+  <div id="pb"></div>
+  <div class="row"><button class="sec" id="back" hidden>⏺ Volver al directo</button></div>
   <div id="msg"></div>
   <div class="row">
     <button data-d="20">◀</button>
@@ -66,7 +74,19 @@ input[type=range]{flex:1}
     <button class="sec" id="save">Guardar foto</button>
   </div>
   <div class="row"><label class="chk"><input type="checkbox" id="armed"> Alarma armada</label></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="conf"> Confirmar movimiento con la cámara (menos falsas alarmas)</label></div>
+  <div class="row"><span>💡 Flash</span><input type="range" id="flash" min="0" max="100" step="10" value="0"><span id="flv">0 %</span><button class="sec" id="floff">Apagar</button></div>
   <div id="st"></div>
+  <h2>Grabaciones</h2>
+  <div class="row"><button class="sec" id="recload">Ver grabaciones</button><select id="days" hidden></select></div>
+  <div id="recinfo" class="small"></div>
+  <div class="chips" id="evs"></div>
+  <div class="chips" id="hours"></div>
+  <div class="row" id="playrow" hidden>
+    <input type="time" id="ptime" step="1" value="00:00:00">
+    <select id="speed"><option value="1">x1</option><option value="2">x2</option><option value="4">x4</option><option value="8">x8</option></select>
+    <button id="pgo">▶ Reproducir</button>
+  </div>
   <h2>Última alerta</h2>
   <img id="alert" alt="">
   <div id="alertt">Sin alertas</div>
@@ -80,7 +100,8 @@ if (window.top !== window.self) { document.body.textContent = ''; throw new Erro
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
 const T_FRAME = 1, T_STATUS = 2, T_ALERT = 3, T_CMD = 0x10;
-let keys = null, mq = null, topics = null, remembered = false;
+let keys = null, mq = null, topics = null, remembered = false, devId = '';
+let mode = 'live', playLastTs = 0, playSpeed = 1, recDay = '';
 let lastFrameTs = 0, lastAlertTs = 0, frames = 0, lastCmdTs = 0;
 let status = null, lastStatusTs = 0, online = null, dragging = false, frameBlob = null, hiddenAt = 0;
 const urls = {};
@@ -158,16 +179,19 @@ async function derive(phrase, dev) {
   const kc = await crypto.subtle.sign('HMAC', hk, enc.encode('cmd'));
   return {
     video: await crypto.subtle.importKey('raw', kv, 'AES-GCM', false, ['decrypt']),
-    cmd: await crypto.subtle.importKey('raw', kc, 'AES-GCM', false, ['encrypt'])
+    cmd: await crypto.subtle.importKey('raw', kc, 'AES-GCM', false, ['encrypt']),
+    rec: await crypto.subtle.importKey('raw', await crypto.subtle.sign('HMAC', hk, enc.encode('rec')), 'AES-GCM', false, ['decrypt'])
   };
 }
 
-async function openMsg(topic, m) {
+async function openWith(key, aad, m) {
   if (m.length < 38 || m[0] !== 1) throw new Error('formato');
   const pt = new Uint8Array(await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: m.slice(1, 13), additionalData: enc.encode(topic), tagLength: 128 }, keys.video, m.slice(13)));
+    { name: 'AES-GCM', iv: m.slice(1, 13), additionalData: enc.encode(aad), tagLength: 128 }, key, m.slice(13)));
   return { ts: Number(new DataView(pt.buffer).getBigUint64(0)), type: pt[8], data: pt.slice(9) };
 }
+const openMsg = (topic, m) => openWith(keys.video, topic, m);
+const T_LIST = 4;
 
 async function sendCmd(obj) {
   if (!mq || !mq.ok) return;
@@ -199,6 +223,10 @@ function renderStatus() {
   if (status) {
     p.push(status.armed ? 'Alarma armada' : 'Alarma desarmada');
     p.push('WiFi ' + status.rssi + ' dBm');
+    if (status.nt) p.push('🌙 Modo noche');
+    p.push(status.sd >= 0 ? ('SD: ' + (status.sd / 1024).toFixed(1) + ' GB libres' + (status.rec ? ' · grabando' : '')) : 'Sin tarjeta SD');
+    $('conf').checked = !!status.cf;
+    if (!flDragging) { $('flash').value = status.fl || 0; $('flv').textContent = (status.fl || 0) + ' %'; }
     p.push(status.motion ? 'Último movimiento: ' + fmt(status.motion) : 'Sin movimiento registrado');
     $('armed').checked = !!status.armed;
     if (!dragging) { $('ang').value = status.angle; $('angv').textContent = status.angle + '°'; }
@@ -206,13 +234,85 @@ function renderStatus() {
   $('st').textContent = p.join(' · ');
 }
 
+function pad2(n) { return String(n).padStart(2, '0'); }
+function dayLabel(d) { return d.slice(6, 8) + '/' + d.slice(4, 6) + '/' + d.slice(0, 4); }
+
+function renderList(j) {
+  if (j.nosd) { $('recinfo').textContent = 'La cámara no tiene tarjeta SD.'; return; }
+  if (j.end) {
+    $('pb').textContent = j.empty ? '⏹ No hay grabación a partir de esa hora.' : '⏹ Fin de la grabación.';
+    return;
+  }
+  if (j.days) {
+    const sel = $('days'); sel.textContent = '';
+    if (!j.days.length) { $('recinfo').textContent = 'Todavía no hay grabaciones.'; sel.hidden = true; return; }
+    for (const d of j.days.slice().reverse()) { const o = document.createElement('option'); o.value = d; o.textContent = dayLabel(d); sel.appendChild(o); }
+    sel.hidden = false; $('recinfo').textContent = j.days.length + ' días grabados. Elige uno.';
+    sel.onchange(); return;
+  }
+  if (j.d) {
+    recDay = j.d;
+    $('recinfo').textContent = dayLabel(j.d) + ': ' + (j.ev.length ? j.ev.length + ' eventos (rojo). ' : 'sin eventos. ') + 'Toca un evento o una hora.';
+    const evs = $('evs'); evs.textContent = '';
+    for (const e of j.ev.slice().reverse().slice(0, 60)) {
+      const b = document.createElement('button'); b.className = 'ev';
+      b.textContent = '🚨 ' + e.slice(0, 2) + ':' + e.slice(2, 4) + ':' + e.slice(4, 6);
+      b.onclick = () => startPlay(recDay, e, 5);
+      evs.appendChild(b);
+    }
+    const hs = $('hours'); hs.textContent = '';
+    for (const h of j.h) {
+      const b = document.createElement('button'); b.textContent = pad2(h) + ':00';
+      b.onclick = () => startPlay(recDay, pad2(h) + '0000', 0);
+      hs.appendChild(b);
+    }
+    $('playrow').hidden = false;
+  }
+}
+
+function startPlay(day, hhmmss, backSeconds) {
+  let t = (+hhmmss.slice(0, 2)) * 3600 + (+hhmmss.slice(2, 4)) * 60 + (+hhmmss.slice(4, 6)) - backSeconds;
+  if (t < 0) t = 0;
+  const tt = pad2(Math.floor(t / 3600)) + pad2(Math.floor(t / 60) % 60) + pad2(t % 60);
+  playSpeed = +$('speed').value || 1;
+  mode = 'play'; playLastTs = 0;
+  $('pb').style.display = 'block';
+  $('pb').textContent = '▶ Cargando grabación…';
+  $('back').hidden = false;
+  sendCmd({ c: 'play', d: day, t: tt, a: playSpeed });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function backToLive() {
+  sendCmd({ c: 'stop' });
+  mode = 'live'; lastFrameTs = 0;
+  $('pb').style.display = 'none'; $('back').hidden = true;
+}
+
 async function onMsg(topic, m) {
   if (topic === topics.online) { online = dec.decode(m) === '1'; renderStatus(); return; }
+  if (topic === topics.play) {
+    if (mode !== 'play') return;
+    let r;
+    try { r = await openWith(keys.rec, 'rec:' + devId, m); }
+    catch (e) { $('msg').textContent = '⚠️ Grabación que no se puede descifrar (frase o ID distintos, o datos manipulados).'; return; }
+    if (r.type !== T_FRAME || r.ts <= playLastTs) return;
+    playLastTs = r.ts;
+    frameBlob = showImg($('cam'), r.data, 'cam'); $('ph').hidden = true;
+    $('pb').textContent = '▶ Grabación ' + fmt(r.ts) + ' · x' + playSpeed;
+    return;
+  }
   let r;
   try { r = await openMsg(topic, m); }
   catch (e) { $('msg').textContent = '⚠️ Mensaje que no se puede descifrar: frase secreta o ID incorrectos, o datos manipulados.'; return; }
   $('msg').textContent = '';
+  if (topic === topics.list && r.type === T_LIST) {
+    if (Date.now() - r.ts > 60000) return;
+    try { renderList(JSON.parse(dec.decode(r.data))); } catch (e) {}
+    return;
+  }
   if (topic === topics.video && r.type === T_FRAME) {
+    if (mode !== 'live') return;
     if (r.ts <= lastFrameTs) return;               // descarta repetidos o desordenados
     if (Date.now() - r.ts > 30000) { $('msg').textContent = '⚠️ Fotograma antiguo descartado (posible repetición o reloj desajustado).'; return; }
     lastFrameTs = r.ts; frames++;
@@ -264,16 +364,17 @@ async function persistDevice(host, user, dev) {
   const wrap = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrap, enc.encode(user)));
-  await idbPut('cfg', { v: 1, host, dev, video: keys.video, cmd: keys.cmd, wrap, iv, ct });
+  await idbPut('cfg', { v: 2, host, dev, video: keys.video, cmd: keys.cmd, rec: keys.rec, wrap, iv, ct });
   try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) {}
 }
 
 function startSession(host, user, pass, dev) {
   const b = 'espcam/' + dev;
-  topics = { video: b + '/v', status: b + '/s', alert: b + '/a', cmd: b + '/c', online: b + '/o' };
+  devId = dev;
+  topics = { video: b + '/v', status: b + '/s', alert: b + '/a', cmd: b + '/c', online: b + '/o', list: b + '/l', play: b + '/p' };
   $('login').hidden = true; $('app').hidden = false;
   $('logout').textContent = remembered ? 'Olvidar este dispositivo' : 'Cerrar sesión';
-  mq = new Mqtt(host, user, pass, [topics.video, topics.status, topics.alert, topics.online], onMsg, onState);
+  mq = new Mqtt(host, user, pass, [topics.video, topics.status, topics.alert, topics.online, topics.list, topics.play], onMsg, onState);
 }
 
 $('go').onclick = async () => {
@@ -302,6 +403,15 @@ $('go').onclick = async () => {
 
 document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => servo(+$('ang').value + +b.dataset.d));
 $('center').onclick = () => servo(90);
+let flDragging = false;
+$('flash').oninput = () => { flDragging = true; $('flv').textContent = $('flash').value + ' %'; };
+$('flash').onchange = () => { flDragging = false; sendCmd({ c: 'flash', a: +$('flash').value }); };
+$('floff').onclick = () => { $('flash').value = 0; $('flv').textContent = '0 %'; sendCmd({ c: 'flash', a: 0 }); };
+$('conf').onchange = () => sendCmd({ c: 'conf', a: $('conf').checked ? 1 : 0 });
+$('recload').onclick = () => { $('recinfo').textContent = 'Consultando la tarjeta…'; sendCmd({ c: 'days' }); };
+$('days').onchange = () => { if ($('days').value) sendCmd({ c: 'day', d: $('days').value }); };
+$('pgo').onclick = () => { const v = ($('ptime').value || '00:00:00').replace(/:/g, ''); if (recDay) startPlay(recDay, (v + '00').slice(0, 6), 0); };
+$('back').onclick = backToLive;
 $('ang').oninput = () => { dragging = true; $('angv').textContent = $('ang').value + '°'; };
 $('ang').onchange = () => { dragging = false; servo(+$('ang').value); };
 $('armed').onchange = () => sendCmd({ c: 'arm', a: $('armed').checked ? 1 : 0 });
@@ -348,9 +458,9 @@ try {
   try {
     if (!window.isSecureContext || !crypto.subtle || !window.indexedDB) return;
     const c = await idbGet('cfg');
-    if (!c || c.v !== 1) return;
+    if (!c || c.v !== 2) return;
     const user = dec.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: c.iv }, c.wrap, c.ct));
-    keys = { video: c.video, cmd: c.cmd };
+    keys = { video: c.video, cmd: c.cmd, rec: c.rec };
     remembered = true;
     startSession(c.host, user, '', c.dev);
   } catch (e) {
